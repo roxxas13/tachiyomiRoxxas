@@ -19,6 +19,8 @@ internal class PageCurlDynamicMesh(
         private set
     var textureCoordinates = FloatArray(vertices.size)
         private set
+    var backTextureCoordinates = FloatArray(vertices.size)
+        private set
     var colors = IntArray((horizontal + 1) * (vertical + 1))
         private set
     var flatIndices = ShortArray(horizontal * vertical * 6)
@@ -64,6 +66,7 @@ internal class PageCurlDynamicMesh(
         this.vertical = vertical
         vertices = FloatArray((horizontal + 1) * (vertical + 1) * 2)
         textureCoordinates = FloatArray(vertices.size)
+        backTextureCoordinates = FloatArray(vertices.size)
         colors = IntArray((horizontal + 1) * (vertical + 1))
         flatIndices = ShortArray(horizontal * vertical * 6)
         frontIndices = ShortArray(horizontal * vertical * 6)
@@ -76,6 +79,8 @@ internal class PageCurlDynamicMesh(
         height: Float,
         bitmapWidth: Float,
         bitmapHeight: Float,
+        backBitmapWidth: Float = bitmapWidth,
+        backBitmapHeight: Float = bitmapHeight,
         touchX: Float,
         touchY: Float,
         requestedRadius: Float,
@@ -163,12 +168,15 @@ internal class PageCurlDynamicMesh(
                 val screenX = if (direction == PageCurlDirection.LEFT_TO_RIGHT) projectedX else width - projectedX
                 val textureX =
                     if (direction == PageCurlDirection.LEFT_TO_RIGHT) sourceX else width - sourceX
+                val backTextureX = width - textureX
                 val vertex = row * (horizontal + 1) + column
                 val offset = vertex * 2
                 vertices[offset] = screenX
                 vertices[offset + 1] = projectedY
                 textureCoordinates[offset] = textureX / width * bitmapWidth
                 textureCoordinates[offset + 1] = sourceY / height * bitmapHeight
+                backTextureCoordinates[offset] = backTextureX / width * backBitmapWidth
+                backTextureCoordinates[offset + 1] = sourceY / height * backBitmapHeight
                 colors[vertex] = lightColor(angle, region, backsideBrightness)
             }
         }
@@ -247,7 +255,7 @@ internal class PageCurlDynamicMesh(
                 val light =
                     (backsideBrightness.coerceIn(0.5f, 1f) * (0.88f + 0.12f * abs(cos(angle))))
                         .coerceIn(0.5f, 1f)
-                Color.rgb((255 * light).toInt(), (248 * light).toInt(), (232 * light).toInt())
+                Color.rgb((255 * light).toInt(), (252 * light).toInt(), (246 * light).toInt())
             }
         }
 

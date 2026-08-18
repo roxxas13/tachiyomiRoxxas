@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.ui.reader.viewer.pager
 
 import android.content.pm.ApplicationInfo
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PointF
 import android.view.Gravity
@@ -83,6 +84,12 @@ abstract class PagerViewer(
     private var curlPrepareJob: Job? = null
     private var curlSurfaceReady = false
     private var curlTargetPosition = -1
+    private var forwardCurlBinding: CurlSurfaceBinding? = null
+    private var backwardCurlBinding: CurlSurfaceBinding? = null
+    private var curlNavigationIntent: CurlNavigationIntent? = null
+    private var curlFrontPage = "none"
+    private var curlBackPage = "none"
+    private var curlUnderPage = "none"
     private var curlDiagnosticsDismissed = false
     private var curlDiagnosticContext = ""
     private val curlDiagnosticsPanel = LinearLayout(activity)
@@ -94,7 +101,10 @@ abstract class PagerViewer(
     private var surfaceReadyNext = false
     private var surfaceReadySpread = false
     private var curlTouchInActivationZone = false
+    private var curlTouchInForwardZone = false
+    private var curlTouchInBackwardZone = false
     private var curlCanPanForward = false
+    private var curlCanPanBackward = false
     private var curlGesturePending = false
     private var curlGestureClaimed = false
     private var curlTouchDownX = 0f
@@ -858,6 +868,12 @@ abstract class PagerViewer(
         curlPreparedPosition = -1
         curlSurfaceReady = false
         curlTargetPosition = -1
+        forwardCurlBinding = null
+        backwardCurlBinding = null
+        curlNavigationIntent = null
+        curlFrontPage = "none"
+        curlBackPage = "none"
+        curlUnderPage = "none"
         surfaceReadyCurrent = false
         surfaceReadyNext = false
         surfaceReadySpread = false
@@ -869,82 +885,137 @@ abstract class PagerViewer(
             updateCurlDiagnostics("inactive")
             return
         }
-        val directionStep = if (this is R2LPagerViewer) -1 else 1
-        val targetPosition = position + directionStep
         val currentItem = adapter.joinedItems.getOrNull(position)
-        val nextItem = adapter.joinedItems.getOrNull(targetPosition)
-        curlDiagnosticContext =
-            "current=$position next=$targetPosition " +
-            "${if (currentItem?.second is ReaderPage) "spread" else "single"} " +
-            if (this is R2LPagerViewer) "RTL" else "LTR"
-        val currentFirst = currentItem?.first as? ReaderPage
-        val nextFirst = nextItem?.first as? ReaderPage
-        if (currentFirst == null || nextFirst == null) {
+        curlDiagnosticContext = "current=$position ${if (this is R2LPagerViewer) "RTL" else "LTR"}"
+        if (currentItem?.first !is ReaderPage) {
             curlPreparingPosition = -1
             curlSurfacePreparationState = "UNAVAILABLE"
-            curlFallback("transition/end")
+            curlFallback("current item is a transition")
             return
         }
+        val forwardStep = if (this is R2LPagerViewer) -1 else 1
         curlPrepareJob =
             scope.launch {
                 val activePages = linkedSetOf<ReaderPage>()
-                val direction =
-                    if (this@PagerViewer is R2LPagerViewer) {
-                        PageCurlDirection.RIGHT_TO_LEFT
-                    } else {
-                        PageCurlDirection.LEFT_TO_RIGHT
-                    }
-                val currentSecond = currentItem.second as? ReaderPage
-                val nextSecond = nextItem.second as? ReaderPage
-                if (currentSecond != null || nextSecond != null) {
-                    // A spread turn requires two complete grouped spreads. Covers, isolated wide
-                    // pages and chapter boundaries deliberately retain the stock pager transition.
-                    if (currentSecond == null || nextSecond == null) {
-                        curlSurfacePreparationState = "UNAVAILABLE"
-                        curlFallback("incomplete spread")
-                        return@launch
-                    }
-                    val swapSpreadSides = config.invertDoublePages
-                    val fixedCurrentPage = if (swapSpreadSides) currentSecond else currentFirst
-                    val turningCurrentPage = if (swapSpreadSides) currentFirst else currentSecond
-                    val fixedNextPage = if (swapSpreadSides) nextSecond else nextFirst
-                    val incomingNextPage = if (swapSpreadSides) nextFirst else nextSecond
-                    val fixedCurrent =
-                        curlSurfaceProvider.load(fixedCurrentPage) ?: return@launch unavailable("current fixed")
-                    val turningCurrent =
-                        curlSurfaceProvider.load(turningCurrentPage) ?: return@launch unavailable("current turning")
-                    surfaceReadyCurrent = true
-                    updateCurlDiagnostics("loading next spread")
-                    val fixedNext = curlSurfaceProvider.load(fixedNextPage) ?: return@launch unavailable("next fixed")
-                    val incomingNext =
-                        curlSurfaceProvider.load(incomingNextPage) ?: return@launch unavailable("next incoming")
-                    surfaceReadyNext = true
-                    surfaceReadySpread = true
-                    if (pager.currentItem != position) return@launch
-                    activePages += listOf(currentFirst, currentSecond, nextFirst, nextSecond)
-                    curlView.setDirection(direction)
-                    curlView.setSpreadPages(fixedCurrent, turningCurrent, fixedNext, incomingNext)
-                } else {
-                    val current = curlSurfaceProvider.load(currentFirst) ?: return@launch unavailable("current")
-                    surfaceReadyCurrent = true
-                    updateCurlDiagnostics("loading next page")
-                    val next = curlSurfaceProvider.load(nextFirst) ?: return@launch unavailable("next")
-                    surfaceReadyNext = true
-                    if (pager.currentItem != position) return@launch
-                    activePages += listOf(currentFirst, nextFirst)
-                    curlView.setDirection(direction)
-                    curlView.setPages(current, next)
-                }
+                forwardCurlBinding =
+                    createCurlBinding(position, position + forwardStep, CurlNavigationIntent.FORWARD, activePages)
+                backwardCurlBinding =
+                    createCurlBinding(position, position - forwardStep, CurlNavigationIntent.BACKWARD, activePages)
+                if (pager.currentItem != position) return@launch
                 curlSurfaceProvider.trimTo(activePages)
-                curlTargetPosition = targetPosition
-                curlSurfaceReady = true
+                curlSurfaceReady = forwardCurlBinding != null || backwardCurlBinding != null
                 curlPreparedPosition = position
                 curlPreparingPosition = -1
-                curlFallbackReason = "none"
-                curlSurfacePreparationState = "READY"
+                surfaceReadyCurrent = curlSurfaceReady
+                surfaceReadyNext = curlSurfaceReady
+                surfaceReadySpread = listOfNotNull(forwardCurlBinding, backwardCurlBinding).any { it.isSpread }
+                curlFallbackReason = if (curlSurfaceReady) "none" else "no safe adjacent mapping"
+                curlSurfacePreparationState = if (curlSurfaceReady) "READY" else "UNAVAILABLE"
+                val targetPosition = forwardCurlBinding?.targetPosition ?: backwardCurlBinding?.targetPosition ?: -1
                 updateCurlDiagnostics("ready → item $targetPosition")
             }
     }
+
+    private suspend fun createCurlBinding(
+        position: Int,
+        targetPosition: Int,
+        intent: CurlNavigationIntent,
+        activePages: MutableSet<ReaderPage>,
+    ): CurlSurfaceBinding? {
+        val currentItem = adapter.joinedItems.getOrNull(position) ?: return null
+        val targetItem = adapter.joinedItems.getOrNull(targetPosition) ?: return null
+        val currentFirst = currentItem.first as? ReaderPage ?: return null
+        val targetFirst = targetItem.first as? ReaderPage ?: return null
+        val currentSecond = currentItem.second as? ReaderPage
+        val targetSecond = targetItem.second as? ReaderPage
+        if ((currentSecond == null) != (targetSecond == null)) return null
+        val forwardDirection =
+            if (this is R2LPagerViewer) PageCurlDirection.RIGHT_TO_LEFT else PageCurlDirection.LEFT_TO_RIGHT
+        val direction =
+            if (intent == CurlNavigationIntent.FORWARD) forwardDirection else forwardDirection.opposite()
+
+        if (currentSecond != null && targetSecond != null) {
+            val current = spreadRoles(currentFirst, currentSecond)
+            val target = spreadRoles(targetFirst, targetSecond)
+            val fixedCurrentPage: ReaderPage
+            val turningCurrentPage: ReaderPage
+            val fixedTargetPage: ReaderPage
+            val incomingTargetPage: ReaderPage
+            if (intent == CurlNavigationIntent.FORWARD) {
+                // LTR: fixed current | turning current -> fixed target (sheet back) | incoming target.
+                // RTL uses the same roles with the renderer direction mirrored.
+                fixedCurrentPage = current.fixed
+                turningCurrentPage = current.turning
+                fixedTargetPage = target.fixed
+                incomingTargetPage = target.turning
+            } else {
+                // Reverse the same physical sheet: current fixed becomes the turning front, while
+                // the target turning page is its back and the target fixed page is revealed below.
+                fixedCurrentPage = current.turning
+                turningCurrentPage = current.fixed
+                fixedTargetPage = target.turning
+                incomingTargetPage = target.fixed
+            }
+            val fixedCurrent = curlSurfaceProvider.load(fixedCurrentPage) ?: return null
+            val turningCurrent = curlSurfaceProvider.load(turningCurrentPage) ?: return null
+            val fixedTarget = curlSurfaceProvider.load(fixedTargetPage) ?: return null
+            val incomingTarget = curlSurfaceProvider.load(incomingTargetPage) ?: return null
+            activePages += listOf(currentFirst, currentSecond, targetFirst, targetSecond)
+            return CurlSurfaceBinding(
+                targetPosition,
+                direction,
+                fixedCurrent,
+                turningCurrent,
+                fixedTarget,
+                incomingTarget,
+                pageLabel(turningCurrentPage),
+                pageLabel(fixedTargetPage),
+                pageLabel(incomingTargetPage),
+            )
+        }
+
+        val front = curlSurfaceProvider.load(currentFirst) ?: return null
+        val back = curlSurfaceProvider.load(targetFirst) ?: return null
+        activePages += listOf(currentFirst, targetFirst)
+        val step = targetPosition - position
+        val followingItem = adapter.joinedItems.getOrNull(targetPosition + step)
+        val followingPage = (followingItem?.first as? ReaderPage)?.takeIf { followingItem.second == null }
+        val underlying = followingPage?.let { curlSurfaceProvider.load(it) } ?: back
+        followingPage?.let(activePages::add)
+        return CurlSurfaceBinding(
+            targetPosition,
+            direction,
+            null,
+            front,
+            back,
+            underlying,
+            pageLabel(currentFirst),
+            pageLabel(targetFirst),
+            followingPage?.let(::pageLabel) ?: "fallback:${pageLabel(targetFirst)}",
+        )
+    }
+
+    private fun spreadRoles(
+        first: ReaderPage,
+        second: ReaderPage,
+    ): CurlSpreadRoles = if (config.invertDoublePages) CurlSpreadRoles(second, first) else CurlSpreadRoles(first, second)
+
+    private fun bindCurlSurface(binding: CurlSurfaceBinding) {
+        curlTargetPosition = binding.targetPosition
+        curlNavigationIntent =
+            if (binding === forwardCurlBinding) CurlNavigationIntent.FORWARD else CurlNavigationIntent.BACKWARD
+        curlFrontPage = binding.frontLabel
+        curlBackPage = binding.backLabel
+        curlUnderPage = binding.underLabel
+        curlView.setDirection(binding.direction)
+        if (binding.isSpread) {
+            curlView.setSpreadPages(binding.fixedCurrent, binding.front, binding.back, binding.underlying)
+        } else {
+            curlView.setPages(binding.front, binding.back, binding.underlying)
+        }
+    }
+
+    private fun pageLabel(page: ReaderPage): String = "${page.number}(index=${page.index})"
 
     private fun unavailable(role: String) {
         curlPreparingPosition = -1
@@ -970,6 +1041,8 @@ abstract class PagerViewer(
     private fun evaluateCurlDown(event: MotionEvent): PageTransitionTouchResult {
         curlGesturePending = false
         curlGestureClaimed = false
+        curlNavigationIntent = null
+        curlTargetPosition = -1
         curlTouchDownX = event.x
         curlTouchDownY = event.y
         curlTouchDownTime = event.downTime
@@ -979,29 +1052,37 @@ abstract class PagerViewer(
         val isSpread = adapter.joinedItems.getOrNull(pager.currentItem)?.second is ReaderPage
         val activationFraction = if (isSpread) SPREAD_ACTIVATION_FRACTION else SINGLE_ACTIVATION_FRACTION
         curlView.activationZoneFraction = if (forceCurlGesture) 1f else activationFraction
-        curlTouchInActivationZone =
+        curlTouchInForwardZone =
             forceCurlGesture ||
             if (this is R2LPagerViewer) {
                 event.x <= pager.width * activationFraction
             } else {
                 event.x >= pager.width * (1f - activationFraction)
             }
+        curlTouchInBackwardZone =
+            forceCurlGesture ||
+            if (this is R2LPagerViewer) {
+                event.x >= pager.width * (1f - activationFraction)
+            } else {
+                event.x <= pager.width * activationFraction
+            }
+        curlTouchInActivationZone =
+            (forwardCurlBinding != null && curlTouchInForwardZone) ||
+            (backwardCurlBinding != null && curlTouchInBackwardZone)
         val holder = currentPageHolder()
         curlScaleState = holder?.curlScaleState() ?: PagerCurlScaleState(null, null)
         val rawCanPanForward =
             if (this is R2LPagerViewer) holder?.canPanLeft() == true else holder?.canPanRight() == true
+        val rawCanPanBackward =
+            if (this is R2LPagerViewer) holder?.canPanRight() == true else holder?.canPanLeft() == true
         curlCanPanForward = curlScaleState.isClearlyZoomed && rawCanPanForward
+        curlCanPanBackward = curlScaleState.isClearlyZoomed && rawCanPanBackward
         curlFallbackReason =
             when {
                 config.pageTransition != PageTransition.PAGE_CURL -> "transition mode is ${config.pageTransition}"
                 !isHorizontalViewer -> "viewer is vertical"
-                !surfaceReadyCurrent -> "current surface unavailable"
-                !surfaceReadyNext -> "next surface unavailable"
-                isSpread && !surfaceReadySpread -> "spread surfaces incomplete"
                 !curlSurfaceReady -> "surface binding not ready"
-                curlTargetPosition !in 0 until adapter.count -> "target item unavailable"
                 !curlTouchInActivationZone -> "touch outside activation zone"
-                curlCanPanForward -> "zoomed page can still pan forward"
                 else -> "none"
             }
         if (curlFallbackReason != "none") {
@@ -1030,9 +1111,27 @@ abstract class PagerViewer(
         val slop = ViewConfiguration.get(activity).scaledTouchSlop.toFloat()
         if (abs(dx) < slop && abs(dy) < slop) return PageTransitionTouchResult.PENDING
         val forwardDistance = if (this is R2LPagerViewer) dx else -dx
-        if (forwardDistance <= slop || abs(dx) <= abs(dy)) {
+        if (abs(dx) <= abs(dy)) {
             curlGesturePending = false
-            curlFallbackReason = if (abs(dx) <= abs(dy)) "movement is vertical" else "movement is not forward"
+            curlFallbackReason = "movement is vertical"
+            Timber.d("Page curl gesture released to pager: $curlFallbackReason (${diagnosticValues()})")
+            updateCurlDiagnostics("gesture rejected")
+            return PageTransitionTouchResult.REJECTED
+        }
+        val intent = if (forwardDistance > slop) CurlNavigationIntent.FORWARD else CurlNavigationIntent.BACKWARD
+        val binding = if (intent == CurlNavigationIntent.FORWARD) forwardCurlBinding else backwardCurlBinding
+        val inIntentZone =
+            if (intent == CurlNavigationIntent.FORWARD) curlTouchInForwardZone else curlTouchInBackwardZone
+        val canPan = if (intent == CurlNavigationIntent.FORWARD) curlCanPanForward else curlCanPanBackward
+        if (binding == null || !inIntentZone || canPan) {
+            curlGesturePending = false
+            curlNavigationIntent = intent
+            curlFallbackReason =
+                when {
+                    binding == null -> "${intent.name.lowercase()} surface mapping unavailable"
+                    !inIntentZone -> "touch outside ${intent.name.lowercase()} activation zone"
+                    else -> "zoomed page can still pan ${intent.name.lowercase()}"
+                }
             Timber.d("Page curl gesture released to pager: $curlFallbackReason (${diagnosticValues()})")
             updateCurlDiagnostics("gesture rejected")
             return PageTransitionTouchResult.REJECTED
@@ -1042,6 +1141,7 @@ abstract class PagerViewer(
         // can never be returned to ViewPager, even if the renderer unexpectedly cannot start.
         curlGesturePending = false
         curlGestureClaimed = true
+        bindCurlSurface(binding)
         curlView.visibility = View.VISIBLE
         updateCurlLocalCoordinates(curlTouchDownX, curlTouchDownY)
         curlExternalGestureActive =
@@ -1175,8 +1275,14 @@ abstract class PagerViewer(
             appendLine("transitionMode=${config.pageTransition}")
             appendLine("horizontalViewer=${this@PagerViewer !is VerticalPagerViewer}")
             appendLine("direction=${if (this@PagerViewer is R2LPagerViewer) "RTL" else "LTR"}")
+            appendLine("navigationIntent=${curlNavigationIntent ?: "none"}")
             appendLine("currentAdapterPosition=${pager.currentItem}")
             appendLine("targetAdapterPosition=$curlTargetPosition")
+            appendLine("forwardTarget=${forwardCurlBinding?.targetPosition ?: "unavailable"}")
+            appendLine("backwardTarget=${backwardCurlBinding?.targetPosition ?: "unavailable"}")
+            appendLine("frontPage=$curlFrontPage")
+            appendLine("backPage=$curlBackPage")
+            appendLine("underPage=$curlUnderPage")
             appendLine("surfaceReadyCurrent=$surfaceReadyCurrent")
             appendLine("surfaceReadyNext=$surfaceReadyNext")
             appendLine("surfaceReadySpread=$surfaceReadySpread")
@@ -1185,6 +1291,7 @@ abstract class PagerViewer(
             appendLine("currentScale=${curlScaleState.current}")
             appendLine("minimumScale=${curlScaleState.minimum}")
             appendLine("canPanForward=$curlCanPanForward")
+            appendLine("canPanBackward=$curlCanPanBackward")
             appendLine(
                 "gestureState=" +
                     when {
@@ -1207,6 +1314,31 @@ abstract class PagerViewer(
             activity.hideMenu()
         }
     }
+}
+
+private enum class CurlNavigationIntent {
+    FORWARD,
+    BACKWARD,
+}
+
+private data class CurlSpreadRoles(
+    val fixed: ReaderPage,
+    val turning: ReaderPage,
+)
+
+private data class CurlSurfaceBinding(
+    val targetPosition: Int,
+    val direction: PageCurlDirection,
+    val fixedCurrent: Bitmap?,
+    val front: Bitmap,
+    val back: Bitmap,
+    val underlying: Bitmap,
+    val frontLabel: String,
+    val backLabel: String,
+    val underLabel: String,
+) {
+    val isSpread: Boolean
+        get() = fixedCurrent != null
 }
 
 private const val SINGLE_ACTIVATION_FRACTION = 0.38f

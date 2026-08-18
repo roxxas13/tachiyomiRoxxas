@@ -32,6 +32,7 @@ class PageCurlView
         private val dynamicRenderer = PageCurlDynamicMeshRenderer()
         private val canvasRenderer = PageCurlCanvasReferenceRenderer()
         private var currentPage: Bitmap? = null
+        private var backPage: Bitmap? = null
         private var nextPage: Bitmap? = null
         private var spreadPages: SpreadPages? = null
         private val spreadDestination = RectF()
@@ -131,10 +132,12 @@ class PageCurlView
         fun setPages(
             current: Bitmap,
             next: Bitmap,
+            underlying: Bitmap = next,
         ) {
             spreadPages = null
             currentPage = current
-            nextPage = next
+            backPage = next
+            nextPage = underlying
             reset()
         }
 
@@ -147,6 +150,7 @@ class PageCurlView
         ) {
             spreadPages = SpreadPages(fixedCurrentPage, turningCurrentPage, fixedNextPage, incomingNextPage)
             currentPage = turningCurrentPage
+            backPage = fixedNextPage
             nextPage = incomingNextPage ?: fixedNextPage
             rendererMode = PageCurlRendererMode.DYNAMIC_MESH
             reset()
@@ -213,6 +217,7 @@ class PageCurlView
                 return
             }
             val current = currentPage ?: return
+            val back = backPage ?: current
             val next = nextPage ?: return
             if (width == 0 || height == 0) return
             if (isCurlCompleted) {
@@ -240,6 +245,8 @@ class PageCurlView
                         height.toFloat(),
                         current.width.toFloat(),
                         current.height.toFloat(),
+                        back.width.toFloat(),
+                        back.height.toFloat(),
                         touchX,
                         touchY,
                         width * curlRadiusFraction,
@@ -250,6 +257,7 @@ class PageCurlView
                     dynamicRenderer.draw(
                         canvas,
                         current,
+                        back,
                         next,
                         dynamicMesh,
                         shadowStrength,
@@ -490,6 +498,7 @@ class PageCurlView
             if (isCurlCompleted) return
 
             val turningCurrent = pages.turningCurrent ?: return
+            val turningBack = pages.fixedNext ?: turningCurrent
             val rendererNext = pages.incomingNext ?: pages.fixedNext ?: return
             fitPage(turningCurrent, turningLeft, pageWidth, turningDestination)
             canvas.save()
@@ -499,6 +508,8 @@ class PageCurlView
                 turningDestination.height(),
                 turningCurrent.width.toFloat(),
                 turningCurrent.height.toFloat(),
+                turningBack.width.toFloat(),
+                turningBack.height.toFloat(),
                 touchX - turningDestination.left,
                 touchY - turningDestination.top,
                 turningDestination.width() * curlRadiusFraction,
@@ -510,6 +521,7 @@ class PageCurlView
             dynamicRenderer.draw(
                 canvas,
                 turningCurrent,
+                turningBack,
                 rendererNext,
                 dynamicMesh,
                 shadowStrength,
@@ -591,6 +603,6 @@ class PageCurlView
             const val MAX_COMPLETE_DURATION_MS = 650L
             const val EXIT_DISTANCE_PAGES = 1.7f
             const val DEFAULT_EXIT_CAPTURE_PROGRESS = 0.82f
-            const val DEFAULT_BACKSIDE_BRIGHTNESS = 0.8f
+            const val DEFAULT_BACKSIDE_BRIGHTNESS = 0.9f
         }
     }

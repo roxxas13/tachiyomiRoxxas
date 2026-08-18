@@ -29,6 +29,7 @@ internal class PageCurlDynamicMeshRenderer {
     fun draw(
         canvas: Canvas,
         current: Bitmap,
+        back: Bitmap,
         next: Bitmap,
         mesh: PageCurlDynamicMesh,
         shadowStrength: Float,
@@ -42,12 +43,13 @@ internal class PageCurlDynamicMeshRenderer {
             destination.set(0f, 0f, renderWidth, renderHeight)
             canvas.drawBitmap(next, null, destination, backgroundPaint)
         }
-        ensureShader(current)
         canvas.save()
         canvas.translate(exitTranslationX, 0f)
-        drawRegion(canvas, mesh, mesh.flatIndices, mesh.flatIndexCount)
-        drawRegion(canvas, mesh, mesh.frontIndices, mesh.frontIndexCount)
-        drawRegion(canvas, mesh, mesh.backIndices, mesh.backIndexCount)
+        ensureShader(current)
+        drawRegion(canvas, mesh, mesh.flatIndices, mesh.flatIndexCount, mesh.textureCoordinates)
+        drawRegion(canvas, mesh, mesh.frontIndices, mesh.frontIndexCount, mesh.textureCoordinates)
+        ensureShader(back)
+        drawRegion(canvas, mesh, mesh.backIndices, mesh.backIndexCount, mesh.backTextureCoordinates)
         drawAxisShadow(canvas, mesh, shadowStrength, renderWidth, renderHeight)
         drawCrestHighlight(canvas, mesh, shadowStrength, renderWidth, renderHeight)
         if (debugOverlay) drawDebugOverlay(canvas, mesh)
@@ -66,6 +68,7 @@ internal class PageCurlDynamicMeshRenderer {
         mesh: PageCurlDynamicMesh,
         indices: ShortArray,
         count: Int,
+        textureCoordinates: FloatArray,
     ) {
         if (count == 0) return
         canvas.drawVertices(
@@ -73,7 +76,7 @@ internal class PageCurlDynamicMeshRenderer {
             mesh.vertices.size,
             mesh.vertices,
             0,
-            mesh.textureCoordinates,
+            textureCoordinates,
             0,
             mesh.colors,
             0,
