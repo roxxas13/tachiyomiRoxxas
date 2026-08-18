@@ -29,6 +29,9 @@ class PagerConfig(
     var pageTransition = PageTransition.SLIDE
         private set
 
+    var pageCurlDiagnostics = false
+        private set
+
     var imageScaleType = 1
         private set
 
@@ -78,6 +81,14 @@ class PagerConfig(
             {
                 pageTransition = it
                 pageTransitionChangedListener?.invoke()
+            },
+        )
+
+        preferences.pageCurlDiagnostics().register(
+            { pageCurlDiagnostics = it },
+            {
+                pageCurlDiagnostics = it
+                pageCurlDiagnosticsChangedListener?.invoke()
             },
         )
 
@@ -227,6 +238,8 @@ class PagerConfig(
     }
 
     var pageTransitionChangedListener: (() -> Unit)? = null
+
+    var pageCurlDiagnosticsChangedListener: (() -> Unit)? = null
 
     companion object {
         const val CUTOUT_PAD = 0

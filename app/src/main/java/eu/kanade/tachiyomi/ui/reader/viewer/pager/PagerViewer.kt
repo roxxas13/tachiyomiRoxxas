@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.ui.reader.viewer.pager
 
-import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PointF
@@ -276,7 +275,18 @@ abstract class PagerViewer(
         config.navigationModeInvertedListener = { activity.binding.navigationOverlay.showNavigationAgain() }
         config.pageTransitionChangedListener = {
             curlDiagnosticsDismissed = false
+            updateCurlDiagnostics("transition changed")
             prepareCurlSurfaces(force = true)
+        }
+        config.pageCurlDiagnosticsChangedListener = {
+            curlDiagnosticsDismissed = false
+            curlView.debugFiniteChecks = config.pageCurlDiagnostics
+            if (config.pageCurlDiagnostics) {
+                updateCurlDiagnostics("diagnostics enabled")
+            } else {
+                curlForceSwitch.isChecked = false
+                curlDiagnosticsPanel.visibility = View.GONE
+            }
         }
     }
 
@@ -1219,8 +1229,6 @@ abstract class PagerViewer(
     }
 
     private fun configureCurlDiagnostics() {
-        val debuggable = activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
-        if (!debuggable) return
         curlDiagnostics.apply {
             setTextColor(Color.WHITE)
             setBackgroundColor(0x99000000.toInt())
@@ -1252,17 +1260,18 @@ abstract class PagerViewer(
                 gravity = Gravity.TOP or Gravity.START
             },
         )
-        curlView.debugFiniteChecks = true
+        curlDiagnosticsPanel.visibility = View.GONE
+        curlView.debugFiniteChecks = config.pageCurlDiagnostics
         curlView.onDebugStateChanged = { state ->
             curlRendererState = state.phase
-            updateCurlDiagnostics(state.phase.name)
+            if (config.pageCurlDiagnostics) updateCurlDiagnostics(state.phase.name)
         }
-        updateCurlDiagnostics("initializing")
+        if (config.pageCurlDiagnostics) updateCurlDiagnostics("initializing")
     }
 
     private fun updateCurlDiagnostics(message: String) {
         if (curlDiagnosticsPanel.parent == null) return
-        if (config.pageTransition != PageTransition.PAGE_CURL) {
+        if (!config.pageCurlDiagnostics || config.pageTransition != PageTransition.PAGE_CURL) {
             curlDiagnosticsPanel.visibility = View.GONE
             return
         }

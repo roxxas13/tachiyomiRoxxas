@@ -449,6 +449,7 @@
     <string name="fullscreen">Fullscreen</string>
     <string name="animate_page_transitions">Animate page transitions</string>
     <string name="page_transition">Page transition</string>
+    <string name="page_curl_diagnostics">Page Curl diagnostics</string>
     <string name="slide">Slide</string>
     <string name="page_curl">Page curl</string>
     <string name="enable_zoom_out">Enable zoom out</string>

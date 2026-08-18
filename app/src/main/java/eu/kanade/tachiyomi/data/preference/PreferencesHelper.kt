@@ -147,6 +147,8 @@ class PreferencesHelper(
         }
     }
 
+    fun pageCurlDiagnostics() = flowPrefs.getBoolean(Keys.pageCurlDiagnostics, false)
+
     fun pagerCutoutBehavior() = flowPrefs.getInt(Keys.pagerCutoutBehavior, 0)
 
     fun landscapeCutoutBehavior() = flowPrefs.getInt("landscape_cutout_behavior", 0)

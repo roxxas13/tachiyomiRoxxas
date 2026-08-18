@@ -64,6 +64,11 @@ class SettingsReaderController : SettingsController() {
                     entriesRes = PageTransition.entries.map { it.stringRes }.toTypedArray()
                     entryValues = PageTransition.entries.map { it.name }
                 }
+                switchPreference {
+                    key = Keys.pageCurlDiagnostics
+                    titleRes = R.string.page_curl_diagnostics
+                    defaultValue = false
+                }
                 multiSelectListPreferenceMat(activity) {
                     key = Keys.readerBottomButtons
                     titleRes = R.string.display_buttons_bottom_reader
