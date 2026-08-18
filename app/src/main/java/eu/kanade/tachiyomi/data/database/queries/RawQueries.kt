@@ -1,12 +1,14 @@
 package eu.kanade.tachiyomi.data.database.queries
 
 import eu.kanade.tachiyomi.data.database.resolvers.SourceIdMangaCountGetResolver
+import eu.kanade.tachiyomi.data.track.TrackManager
 import eu.kanade.tachiyomi.ui.recents.RecentsPresenter
 import eu.kanade.tachiyomi.data.database.tables.CategoryTable as Category
 import eu.kanade.tachiyomi.data.database.tables.ChapterTable as Chapter
 import eu.kanade.tachiyomi.data.database.tables.HistoryTable as History
 import eu.kanade.tachiyomi.data.database.tables.MangaCategoryTable as MangaCategory
 import eu.kanade.tachiyomi.data.database.tables.MangaTable as Manga
+import eu.kanade.tachiyomi.data.database.tables.TrackTable as Track
 
 /**
  * Query to get the manga from the library, with their categories and unread count.
@@ -18,7 +20,8 @@ val libraryQuery =
         SELECT ${Manga.TABLE}.*,
             COALESCE(CC.count, 0) AS ${Manga.COL_UNREAD_COUNT}, COALESCE(C.unread, '') AS ${Manga.COL_UNREAD},
             COALESCE(RC.count, 0) AS ${Manga.COL_READ_COUNT}, COALESCE(R.hasread, '') AS ${Manga.COL_HAS_READ},
-            COALESCE(B.bookmarkCount, 0) AS ${Manga.COL_BOOKMARK_COUNT}
+            COALESCE(B.bookmarkCount, 0) AS ${Manga.COL_BOOKMARK_COUNT},
+            COALESCE(S.score, 0) AS ${Manga.COL_SCORE}
         FROM ${Manga.TABLE}
         LEFT JOIN (
             SELECT ${Chapter.COL_MANGA_ID}, COUNT(*) AS count
@@ -57,6 +60,22 @@ val libraryQuery =
             GROUP BY ${Chapter.COL_MANGA_ID}
         ) AS B
         ON ${Manga.COL_ID} = B.${Chapter.COL_MANGA_ID}
+        LEFT JOIN (
+            SELECT ${Track.COL_MANGA_ID},
+                AVG(
+                    CASE ${Track.COL_SYNC_ID}
+                        -- AniList always persists its raw score on a 0-100 scale regardless of
+                        -- the user's display format - see Anilist.get10PointScore().
+                        WHEN ${TrackManager.ANILIST} THEN ${Track.COL_SCORE} / 10
+                        -- every other tracker already stores its raw score on a 0-10 scale.
+                        ELSE ${Track.COL_SCORE}
+                    END
+                ) AS score
+            FROM ${Track.TABLE}
+            WHERE ${Track.COL_SCORE} > 0
+            GROUP BY ${Track.COL_MANGA_ID}
+        ) AS S
+        ON ${Manga.COL_ID} = S.${Track.COL_MANGA_ID}
         WHERE ${Manga.COL_FAVORITE} = 1
         GROUP BY ${Manga.COL_ID}
         ORDER BY ${Manga.COL_TITLE}

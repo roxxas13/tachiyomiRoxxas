@@ -118,6 +118,18 @@ private fun ComparisonQueryNode.matches(item: LibraryItem): Boolean {
             ComparisonField.READ -> value.toIntOrNull()?.let { queryComparator.apply(manga.read, it) }
 
             ComparisonField.TOTAL -> value.toIntOrNull()?.let { queryComparator.apply(manga.totalChapters, it) }
+
+            ComparisonField.SCORE ->
+                value.toFloatOrNull()?.let {
+                    // A score of 0 means "no score data" (untracked, or tracked but unrated),
+                    // not "rated 0" - exclude it from more-than/less-than matches so those
+                    // manga don't leak in, but still allow an explicit `score=0` to find them.
+                    if (queryComparator == Comparator.EQ) {
+                        queryComparator.apply(manga.score, it)
+                    } else {
+                        manga.score > 0 && queryComparator.apply(manga.score, it)
+                    }
+                }
         } ?: false
 
     return if (negated) !match else match

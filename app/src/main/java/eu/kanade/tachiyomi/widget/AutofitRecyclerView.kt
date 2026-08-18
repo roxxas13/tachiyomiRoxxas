@@ -134,6 +134,10 @@ class AutofitRecyclerView
         private fun setNewManager() {
             val firstPos = findFirstVisibleItemPosition().takeIf { it != NO_POSITION }
             layoutManager = manager
+            // A new manager starts at one column, and setSpan() skips a count it already stores
+            if (spanCount > 0) {
+                managerSpanCount = spanCount
+            }
             if (firstPos != null) {
                 val insetsTop = rootWindowInsetsCompat?.getInsets(systemBars())?.top ?: 0
                 doOnNextLayout {

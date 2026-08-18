@@ -43,6 +43,8 @@ object MangaTable {
 
     const val COL_BOOKMARK_COUNT = "bookmark_count"
 
+    const val COL_SCORE = "score"
+
     const val COL_CATEGORY = "category"
 
     const val COL_HIDE_TITLE = "hideTitle"

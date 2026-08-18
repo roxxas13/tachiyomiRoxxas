@@ -2,11 +2,17 @@ package eu.kanade.tachiyomi.ui.base
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.Configuration
 import android.util.AttributeSet
+import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.appcompat.view.menu.MenuItemImpl
+import androidx.core.view.updateLayoutParams
 import androidx.transition.TransitionManager
 import com.google.android.material.navigation.NavigationBarItemView
+import com.google.android.material.navigation.NavigationBarSubheaderView
 import com.google.android.material.navigationrail.NavigationRailMenuView
 import com.google.android.material.navigationrail.NavigationRailView
 import eu.kanade.tachiyomi.R
@@ -25,6 +31,16 @@ class SideNavView : NavigationRailView {
 
     constructor(context: Context, attrs: AttributeSet?, defStyleAttr: Int) :
         super(context, attrs, defStyleAttr)
+
+    init {
+        if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
+            itemIconGravity = ITEM_ICON_GRAVITY_TOP
+            itemGravity = ITEM_GRAVITY_TOP_CENTER
+            itemActiveIndicatorExpandedHeight = itemActiveIndicatorHeight
+            setItemActiveIndicatorExpandedPadding(0, 0, 0, 0)
+            itemActiveIndicatorExpandedMarginHorizontal = itemActiveIndicatorMarginHorizontal
+        }
+    }
 
     private val sideNavMenuView: SideNavMenuView?
         get() = menuView as? SideNavMenuView
@@ -62,7 +78,7 @@ class SideNavView : NavigationRailView {
     }
 }
 
-@SuppressLint("RestrictedApi")
+@SuppressLint("RestrictedApi", "PrivateResource")
 private class SideNavMenuView(
     context: Context,
 ) : NavigationRailMenuView(context) {
@@ -74,6 +90,22 @@ private class SideNavMenuView(
     // TransitionManager skips a scene root that isn't laid out, the only seam for turning down the
     // transition the menu starts for itself
     override fun isLaidOut(): Boolean = !suppressTransitions && super.isLaidOut()
+
+    // The "Recents" subheader defaults to left-aligned text with an asymmetric left margin, since
+    // it's designed to sit above a full-width nav drawer-style list. Center it to match every
+    // other (icon-centered) row on this rail instead.
+    override fun addView(child: View) {
+        super.addView(child)
+        if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT &&
+            child is NavigationBarSubheaderView &&
+            child.itemData?.itemId == R.id.nav_recents_group
+        ) {
+            child.findViewById<TextView>(MaterialR.id.navigation_menu_subheader_label)?.apply {
+                gravity = Gravity.CENTER
+                updateLayoutParams<MarginLayoutParams> { marginStart = 0 }
+            }
+        }
+    }
 }
 
 /** Stands in for the rail's own item view, which is final and package private. */

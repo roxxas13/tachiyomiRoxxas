@@ -9,6 +9,7 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FormatListNumbered
 import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.Style
 import androidx.compose.material.icons.outlined.Title
 import androidx.compose.material.icons.outlined.Translate
@@ -51,12 +52,21 @@ private val MangaField.shorthand: String
 private val ComparisonField.shorthand: String
     get() = aliases.getOrElse(1) { aliases[0] }
 
-/** The fields/types offered in the search filter sheet. */
+/**
+ * The fields/types offered in the search filter sheet.
+ *
+ * @param showScore whether to include the Score field - only meaningful if the user is logged
+ * into at least one tracker (see [eu.kanade.tachiyomi.ui.library.LibraryPresenter.isLoggedIntoTracking]),
+ * since an untracked library has no scores to filter on.
+ */
 @Composable
-fun rememberLibrarySearchFieldOptions(seriesTypeOptions: List<String> = emptyList()): List<LibrarySearchFieldOption> {
+fun rememberLibrarySearchFieldOptions(
+    seriesTypeOptions: List<String> = emptyList(),
+    showScore: Boolean = false,
+): List<LibrarySearchFieldOption> {
     val sourceIcon = ImageVector.vectorResource(id = R.drawable.ic_browse_outline_24dp)
-    return remember(seriesTypeOptions) {
-        listOf(
+    return remember(seriesTypeOptions, showScore) {
+        listOfNotNull(
             LibrarySearchFieldOption(
                 R.string.title,
                 Icons.Outlined.Title,
@@ -123,6 +133,18 @@ fun rememberLibrarySearchFieldOptions(seriesTypeOptions: List<String> = emptyLis
                 moreLabelRes = R.string.search_more_than,
                 lessLabelRes = R.string.search_fewer_than,
             ),
+            if (showScore) {
+                LibrarySearchFieldOption(
+                    R.string.score,
+                    Icons.Outlined.Star,
+                    ComparisonField.SCORE.shorthand,
+                    isComparison = true,
+                    moreLabelRes = R.string.search_more_than,
+                    lessLabelRes = R.string.search_less_than,
+                )
+            } else {
+                null
+            },
         )
     }
 }

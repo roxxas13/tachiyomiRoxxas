@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.data.database.models.Chapter.Companion.copy
 import eu.kanade.tachiyomi.data.database.models.LibraryManga
 import eu.kanade.tachiyomi.data.database.models.Manga
 import eu.kanade.tachiyomi.data.database.models.MangaCategory
-import eu.kanade.tachiyomi.data.database.models.Track
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.preference.DelayedLibrarySuggestionsJob
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
@@ -501,16 +500,20 @@ class LibraryPresenter(
             if (item.manga.source !in sources) return false
         }
         val trackingScore = customFilters.filterTrackingScore
-        if (trackingScore > 0 || trackingScore == -1) {
-            val tracks = db.getTracks(item.manga).executeAsBlocking()
-
-            val hasTrack =
-                loggedServices.any { service ->
-                    tracks.any { it.sync_id == service.id }
+        if (trackingScore >= 0) {
+            // item.manga.score is already 0 for untracked/unscored manga, matching
+            // filterTrackingScore's own 0-means-unscored convention - but a genuine low average
+            // (e.g. 0.4) would also round to 0 and become indistinguishable from "unscored", so
+            // real scores are floored at 1 the same way the old per-manga mean calculation did.
+            val scoreOutOf10 =
+                if (item.manga.score > 0f) {
+                    item.manga.score
+                        .roundToInt()
+                        .coerceIn(1, 10)
+                } else {
+                    0
                 }
-            if (trackingScore > 0 && !hasTrack) return false
-
-            if (getMeanScoreToInt(tracks) != trackingScore) return false
+            if (scoreOutOf10 != trackingScore) return false
         }
         if (!matchesFilterTracking(item, customFilters.filterTracked, filterTrackers)) return false
         val startingYear = customFilters.filterStartYear
@@ -534,17 +537,6 @@ class LibraryPresenter(
         return true
     }
 
-    /**
-     * Get mean score rounded to int of a single manga
-     */
-    private fun getMeanScoreToInt(tracks: List<Track>): Int {
-        val scoresList =
-            tracks
-                .filter { it.score > 0 }
-                .mapNotNull { it.get10PointScore() }
-        return if (scoresList.isEmpty()) -1 else scoresList.average().roundToInt().coerceIn(1..10)
-    }
-
     private fun LibraryManga.getStartYear(): Int {
         if (db.getChapters(id).executeAsBlocking().any { it.read }) {
             val chapters = db.getHistoryByMangaId(id!!).executeAsBlocking().filter { it.last_read > 0 }
@@ -553,14 +545,6 @@ class LibraryPresenter(
             return if (date <= 0L) -1 else cal.get(Calendar.YEAR)
         }
         return -1
-    }
-
-    /**
-     * Convert the score to a 10 point score
-     */
-    private fun Track.get10PointScore(): Float? {
-        val service = trackManager.getService(this.sync_id)
-        return service?.get10PointScore(this.score)
     }
 
     private fun matchesFilterTracking(

@@ -89,6 +89,7 @@ import java.time.ZoneOffset
  * Null leaves the lower bound unrestricted. The upper bound is always today.
  * @param seriesTypeOptions the distinct series-type labels actually present in the library - see
  * [rememberLibrarySearchFieldOptions]. Empty hides the series type field entirely.
+ * @param showScore whether to show the Score field - see [rememberLibrarySearchFieldOptions].
  * @param onFieldSelected called with the currently selected [SearchCombinator] (include/exclude
  * polarity), whether the join is optional (an OR alternative rather than a required match), the
  * tapped [LibrarySearchFieldOption], the separator to join it to a value with (`:` for plain
@@ -107,6 +108,7 @@ fun LibrarySearchFilterSheetContent(
     minDateAddedMillis: Long? = null,
     showOptional: Boolean = true,
     seriesTypeOptions: List<String> = emptyList(),
+    showScore: Boolean = false,
     onFieldSelected: (SearchCombinator, Boolean, LibrarySearchFieldOption, String, String?) -> Unit = { _, _, _, _, _ -> },
     onDateRangeSelected: (SearchCombinator, Boolean, LibrarySearchFieldOption, String, String) -> Unit = { _, _, _, _, _ -> },
 ) {
@@ -216,7 +218,7 @@ fun LibrarySearchFilterSheetContent(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy((-4).dp),
         ) {
-            rememberLibrarySearchFieldOptions(seriesTypeOptions = seriesTypeOptions).forEach { field ->
+            rememberLibrarySearchFieldOptions(seriesTypeOptions = seriesTypeOptions, showScore = showScore).forEach { field ->
                 val valueOptions = field.valueOptions
                 when {
                     field.isComparison ->

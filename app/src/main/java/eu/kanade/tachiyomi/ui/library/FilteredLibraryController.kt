@@ -32,7 +32,10 @@ class FilteredLibraryController(
         private set
     var filterTags = emptyArray<String>()
         private set
-    var filterTrackingScore: Int = 0
+
+    // -1 means "off"; 0 means "find untracked/unscored manga" (matches LibraryManga.score's own
+    // 0-means-unscored convention); 1-10 is an exact target score.
+    var filterTrackingScore: Int = -1
         private set
     var filterStartYear: Int = 0
         private set
@@ -56,7 +59,7 @@ class FilteredLibraryController(
         filterTags: Array<String> = emptyArray(),
         filterTracked: Int = 0,
         filterTrackerName: String? = null,
-        filterTrackingScore: Int = 0,
+        filterTrackingScore: Int = -1,
         filterStartYear: Int = 0,
         filterLength: IntRange? = null,
     ) : this() {
