@@ -287,13 +287,33 @@ jobs:
           fi
 
           for apk in "${apks[@]}"; do
-            package_line=$($AAPT2 dump badging "$apk" | sed -n '1p')
-            actual_package=$(sed -nE "s/.*name='([^']+)'.*/\1/p" <<< "$package_line")
-            actual_code=$(sed -nE "s/.*versionCode='([^']+)'.*/\1/p" <<< "$package_line")
-            actual_name=$(sed -nE "s/.*versionName='([^']+)'.*/\1/p" <<< "$package_line")
+            badging=$($AAPT2 dump badging "$apk")
+            package_line=$(printf '%s\n' "$badging" | sed -n '/^package:/ {p;q;}')
+            actual_package=$(sed -nE "s/^package:[[:space:]]+name='([^']*)'.*/\1/p" <<< "$package_line")
+            actual_code=$(sed -nE "s/.*[[:space:]]versionCode='([^']*)'.*/\1/p" <<< "$package_line")
+            actual_name=$(sed -nE "s/.*[[:space:]]versionName='([^']*)'.*/\1/p" <<< "$package_line")
+            if [[ -z "$actual_package" || -z "$actual_code" || -z "$actual_name" ]]; then
+              echo "Could not parse required package metadata for $apk."
+              echo "Expected:"
+              echo "  package=$PACKAGE_ID"
+              echo "  versionCode=$VERSION_CODE"
+              echo "  versionName=$VERSION_NAME"
+              echo "Found:"
+              echo "  package=$actual_package"
+              echo "  versionCode=$actual_code"
+              echo "  versionName=$actual_name"
+              exit 1
+            fi
             if [[ "$actual_package" != "$PACKAGE_ID" || "$actual_code" != "$VERSION_CODE" || "$actual_name" != "$VERSION_NAME" ]]; then
               echo "Package/version verification failed for $apk."
-              echo "Found package=$actual_package versionCode=$actual_code versionName=$actual_name"
+              echo "Expected:"
+              echo "  package=$PACKAGE_ID"
+              echo "  versionCode=$VERSION_CODE"
+              echo "  versionName=$VERSION_NAME"
+              echo "Found:"
+              echo "  package=$actual_package"
+              echo "  versionCode=$actual_code"
+              echo "  versionName=$actual_name"
               exit 1
             fi
           done
