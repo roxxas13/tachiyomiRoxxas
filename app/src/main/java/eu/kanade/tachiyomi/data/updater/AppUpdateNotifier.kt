@@ -49,7 +49,7 @@ internal class AppUpdateNotifier(
 
     fun promptUpdate(release: GithubRelease) {
         val body = release.info
-        val url = release.downloadLink
+        val url = release.downloadLink ?: return
         val releaseUrl = release.releaseLink
         val isBeta = release.preRelease == true
 

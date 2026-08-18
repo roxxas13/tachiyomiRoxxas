@@ -1151,7 +1151,7 @@ open class MainActivity : BaseActivity<MainActivityBinding>() {
                     val result = updateChecker.checkForUpdate(this@MainActivity)
                     if (result is AppUpdateResult.NewUpdate) {
                         val body = result.release.info
-                        val url = result.release.downloadLink
+                        val url = result.release.downloadLink ?: return@launchIO
                         val isBeta = result.release.preRelease == true
 
                         // Create confirmation window

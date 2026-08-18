@@ -24,20 +24,28 @@ data class GithubRelease(
      * Get download link of latest release from the assets.
      * @return download link of latest release.
      */
-    val downloadLink: String
-        get() {
-            val apkVariant =
-                when (Build.SUPPORTED_ABIS[0]) {
-                    "arm64-v8a" -> "-arm64-v8a"
-                    "armeabi-v7a" -> "-armeabi-v7a"
-                    "x86" -> "-x86"
-                    "x86_64" -> "-x86_64"
-                    else -> ""
-                }
+    val downloadLink: String?
+        get() = findDownloadLink(Build.SUPPORTED_ABIS.firstOrNull())
 
-            return assets.find { it.downloadLink.contains("tachiyomij2k$apkVariant-") }?.downloadLink
-                ?: assets[0].downloadLink
-        }
+    internal fun findDownloadLink(primaryAbi: String?): String? {
+        val apkAssets = assets.filter { it.downloadLink.substringBefore('?').endsWith(".apk", ignoreCase = true) }
+        val abiSuffix =
+            when (primaryAbi) {
+                "arm64-v8a" -> "-arm64-v8a"
+                "armeabi-v7a" -> "-armeabi-v7a"
+                "x86" -> "-x86"
+                "x86_64" -> "-x86_64"
+                else -> null
+            }
+
+        return abiSuffix
+            ?.let { suffix ->
+                apkAssets.find { it.fileName.startsWith("tachiyomij2k$suffix-", ignoreCase = true) }
+            }?.downloadLink
+            ?: apkAssets
+                .find { it.fileName.startsWith("tachiyomij2k-v", ignoreCase = true) }
+                ?.downloadLink
+    }
 
     /**
      * Assets class containing download url.
@@ -46,5 +54,8 @@ data class GithubRelease(
     @Serializable
     data class Assets(
         @SerialName("browser_download_url") val downloadLink: String,
-    )
+    ) {
+        internal val fileName: String
+            get() = downloadLink.substringBefore('?').substringAfterLast('/')
+    }
 }

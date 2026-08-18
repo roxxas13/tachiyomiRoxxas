@@ -35,12 +35,14 @@ class AppUpdateChecker {
                 with(json) {
                     if (preferences.checkForBetas().get()) {
                         networkService.client
-                            .newCall(GET("https://api.github.com/repos/$GITHUB_REPO/releases"))
+                            .newCall(GET("https://api.github.com/repos/$APP_UPDATE_REPOSITORY/releases"))
                             .await()
                             .parseAs<List<GithubRelease>>()
                             .let { githubReleases ->
                                 val releases =
-                                    githubReleases.take(10).filter { isNewVersion(it.version) }
+                                    githubReleases.take(10).filter {
+                                        isNewVersion(it.version) && it.downloadLink != null
+                                    }
                                 // Check if any of the latest versions are newer than the current version
                                 val release =
                                     releases
@@ -61,14 +63,14 @@ class AppUpdateChecker {
                             }
                     } else {
                         networkService.client
-                            .newCall(GET("https://api.github.com/repos/$GITHUB_REPO/releases/latest"))
+                            .newCall(GET("https://api.github.com/repos/$APP_UPDATE_REPOSITORY/releases/latest"))
                             .await()
                             .parseAs<GithubRelease>()
                             .let {
                                 preferences.lastAppCheck().set(Date().time)
 
                                 // Check if latest version is newer than the current version
-                                if (isNewVersion(it.version)) {
+                                if (isNewVersion(it.version) && it.downloadLink != null) {
                                     AppUpdateResult.NewUpdate(it)
                                 } else {
                                     AppUpdateResult.NoNewUpdate
@@ -89,7 +91,7 @@ class AppUpdateChecker {
         }
     }
 
-    private fun isNewVersion(
+    internal fun isNewVersion(
         versionTag: String,
         currentVersion: String = BuildConfig.VERSION_NAME,
     ): Boolean {
@@ -135,6 +137,8 @@ val RELEASE_TAG: String by lazy {
     "v${BuildConfig.VERSION_NAME}"
 }
 
-const val GITHUB_REPO: String = "Jays2Kings/tachiyomiJ2K"
+const val APP_UPDATE_REPOSITORY_OWNER = "roxxas13"
+const val APP_UPDATE_REPOSITORY_NAME = "tachiyomiRoxxas"
+const val APP_UPDATE_REPOSITORY = "$APP_UPDATE_REPOSITORY_OWNER/$APP_UPDATE_REPOSITORY_NAME"
 
-val RELEASE_URL = "https://github.com/$GITHUB_REPO/releases/tag/$RELEASE_TAG"
+val RELEASE_URL = "https://github.com/$APP_UPDATE_REPOSITORY/releases/tag/$RELEASE_TAG"

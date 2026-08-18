@@ -163,7 +163,7 @@ class AboutController : SettingsController() {
             when (result) {
                 is AppUpdateResult.NewUpdate -> {
                     val body = result.release.info
-                    val url = result.release.downloadLink
+                    val url = result.release.downloadLink ?: return@launch
                     val isBeta = result.release.preRelease == true
 
                     // Create confirmation window

@@ -96,7 +96,7 @@ class AppDownloadInstallJob(
             if (result is AppUpdateResult.NewUpdate) {
                 AppUpdateNotifier(context.localeContext).cancel()
                 AppUpdateNotifier.releasePageUrl = result.release.releaseLink
-                url = result.release.downloadLink
+                url = result.release.downloadLink ?: return Result.success()
             } else {
                 return Result.success()
             }
