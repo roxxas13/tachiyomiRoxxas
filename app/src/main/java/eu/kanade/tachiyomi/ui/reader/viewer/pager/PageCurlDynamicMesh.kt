@@ -4,7 +4,6 @@ import android.graphics.Color
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
-import kotlin.math.hypot
 import kotlin.math.sin
 
 internal class PageCurlDynamicMesh(
@@ -90,27 +89,18 @@ internal class PageCurlDynamicMesh(
         backIndexCount = 0
         val requestedTouchX = if (direction == PageCurlDirection.LEFT_TO_RIGHT) touchX else width - touchX
         val canonicalTouchX = requestedTouchX.coerceIn(-width * MAX_PULL_BEYOND_PAGE, width * 1.1f)
-        val canonicalTouchY = touchY.coerceIn(height * 0.04f, height * 0.96f)
         touchScreenX = touchX
-        touchScreenY = canonicalTouchY
+        touchScreenY = touchY.coerceIn(0f, height)
         val anchorX = width
         val anchorY = height * 0.5f
-        var pullX = anchorX - canonicalTouchX
-        var pullY = (anchorY - canonicalTouchY).coerceIn(-height * 0.42f, height * 0.42f)
-        val pullLength = hypot(pullX, pullY)
-        if (pullLength < 1f) {
-            pullX = 1f
-            pullY = 0f
-        }
-        val safeLength = hypot(pullX, pullY).coerceAtLeast(1f)
-        physicalPullDistance = safeLength
-        normalX = pullX / safeLength
-        normalY = pullY / safeLength
-        axisX = -normalY
-        axisY = normalX
+        physicalPullDistance = (anchorX - canonicalTouchX).coerceAtLeast(1f)
+        normalX = 1f
+        normalY = 0f
+        axisX = 0f
+        axisY = 1f
         foldX = (anchorX + canonicalTouchX) * 0.5f
-        foldY = (anchorY + canonicalTouchY) * 0.5f
-        val anchorDistance = safeLength * 0.5f
+        foldY = anchorY
+        val anchorDistance = physicalPullDistance * 0.5f
         val radius = requestedRadius.coerceAtMost(anchorDistance / (PI.toFloat() * 2.15f)).coerceAtLeast(2f)
         curlBoundaryDistance = PI.toFloat() * radius
         val tailLength = (anchorDistance - curlBoundaryDistance).coerceAtLeast(1f)

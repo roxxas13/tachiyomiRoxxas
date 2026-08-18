@@ -92,24 +92,19 @@ internal class PageCurlDynamicMeshRenderer {
         renderHeight: Float,
     ) {
         val shadowWidth = renderWidth * 0.055f
-        val angleDegrees = Math.toDegrees(kotlin.math.atan2(mesh.axisY.toDouble(), mesh.axisX.toDouble())).toFloat()
         gradientMatrix.reset()
         gradientMatrix.setScale(shadowWidth, 1f)
-        gradientMatrix.postRotate(angleDegrees - 90f)
-        gradientMatrix.postTranslate(mesh.foldX, mesh.foldY)
+        gradientMatrix.postTranslate(mesh.foldX, 0f)
         shadowShader.setLocalMatrix(gradientMatrix)
         shadowPaint.shader = shadowShader
         shadowPaint.alpha = (135 * strength.coerceIn(0f, 1f)).toInt()
-        canvas.save()
-        canvas.rotate(angleDegrees - 90f, mesh.foldX, mesh.foldY)
         canvas.drawRect(
             mesh.foldX - shadowWidth,
-            mesh.foldY - renderHeight * 1.5f,
+            0f,
             mesh.foldX,
-            mesh.foldY + renderHeight * 1.5f,
+            renderHeight,
             shadowPaint,
         )
-        canvas.restore()
     }
 
     private fun drawCrestHighlight(
@@ -120,17 +115,15 @@ internal class PageCurlDynamicMeshRenderer {
         renderHeight: Float,
     ) {
         val crestX = mesh.foldX + mesh.normalX * mesh.curlBoundaryDistance * 0.5f
-        val crestY = mesh.foldY + mesh.normalY * mesh.curlBoundaryDistance * 0.5f
-        val extent = renderWidth + renderHeight
         shadowPaint.shader = null
         shadowPaint.color = Color.WHITE
         shadowPaint.alpha = (32 * strength.coerceIn(0f, 1f)).toInt()
         shadowPaint.strokeWidth = renderWidth * 0.012f
         canvas.drawLine(
-            crestX - mesh.axisX * extent,
-            crestY - mesh.axisY * extent,
-            crestX + mesh.axisX * extent,
-            crestY + mesh.axisY * extent,
+            crestX,
+            0f,
+            crestX,
+            renderHeight,
             shadowPaint,
         )
     }
