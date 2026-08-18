@@ -33,6 +33,7 @@ enum class ComparisonField(
     UNREAD("unread"),
     READ("read"),
     TOTAL("total"),
+    SCORE("score"),
     ;
 
     companion object {
