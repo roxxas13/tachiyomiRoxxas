@@ -223,7 +223,17 @@ jobs:
             [x86_64]="app/build/outputs/apk/standard/release/app-standard-x86_64-release-unsigned.apk"
           )
 
-          expected_digest=$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          normalize_fingerprint() {
+            tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]'
+          }
+
+          expected_digest=$(printf '%s' "$EXPECTED_CERT_SHA256" | normalize_fingerprint)
+          if [[ ! "$expected_digest" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Configured expected certificate SHA-256 is not a valid 64-character hexadecimal digest."
+            echo "Expected certificate SHA-256: $expected_digest"
+            exit 1
+          fi
+
           for variant in universal arm64-v8a armeabi-v7a x86 x86_64; do
             source_apk="${source_apks[$variant]}"
             test -f "$source_apk"
@@ -243,9 +253,22 @@ jobs:
 
             verification=$($APKSIGNER verify --verbose --print-certs "$output_apk")
             printf '%s\n' "$verification"
-            actual_digest=$(printf '%s\n' "$verification" | sed -nE 's/^Signer #1 certificate SHA-256 digest: //p' | head -1 | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
-            if [[ -z "$actual_digest" || "$actual_digest" != "$expected_digest" ]]; then
+            actual_fingerprint=$(
+              printf '%s\n' "$verification" |
+                sed -nE 's/.*certificate SHA-256 digest:[[:space:]]*//p' |
+                head -1
+            )
+            actual_digest=$(printf '%s' "$actual_fingerprint" | normalize_fingerprint)
+            if [[ ! "$actual_digest" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "Could not parse a valid 64-character certificate SHA-256 digest for $output_apk."
+              echo "Expected certificate SHA-256: $expected_digest"
+              echo "Actual certificate SHA-256: $actual_digest"
+              exit 1
+            fi
+            if [[ "$actual_digest" != "$expected_digest" ]]; then
               echo "Signing certificate mismatch for $output_apk."
+              echo "Expected certificate SHA-256: $expected_digest"
+              echo "Actual certificate SHA-256: $actual_digest"
               exit 1
             fi
           done
