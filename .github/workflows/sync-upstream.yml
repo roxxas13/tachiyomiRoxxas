@@ -1,0 +1,227 @@
+name: Sync upstream TachiyomiJ2K
+
+on:
+  schedule:
+    - cron: "17 8 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: sync-upstream-master
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  FEATURE_BRANCH: feature/page-curl
+  SYNC_BRANCH: sync/upstream-master
+  UPSTREAM_URL: https://github.com/Jays2Kings/tachiyomiJ2K.git
+
+jobs:
+  sync:
+    name: Prepare upstream sync pull request
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.FEATURE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Fetch feature, sync, and upstream branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          git remote add upstream "$UPSTREAM_URL"
+          git fetch --no-tags origin \
+            "+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH" \
+            "+refs/heads/$SYNC_BRANCH:refs/remotes/origin/$SYNC_BRANCH" || \
+            git fetch --no-tags origin "+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH"
+          git fetch --no-tags upstream "+refs/heads/master:refs/remotes/upstream/master"
+
+      - name: Detect upstream changes
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          feature_sha=$(git rev-parse "origin/$FEATURE_BRANCH")
+          upstream_sha=$(git rev-parse upstream/master)
+          merge_base=$(git merge-base "$feature_sha" "$upstream_sha")
+
+          echo "feature_sha=$feature_sha" >> "$GITHUB_OUTPUT"
+          echo "upstream_sha=$upstream_sha" >> "$GITHUB_OUTPUT"
+          echo "merge_base=$merge_base" >> "$GITHUB_OUTPUT"
+
+          if git merge-base --is-ancestor "$upstream_sha" "$feature_sha"; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "Feature branch already contains upstream/master at $upstream_sha" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "needed=true" >> "$GITHUB_OUTPUT"
+          echo "Upstream commits pending: $(git rev-list --count "$feature_sha..$upstream_sha")"
+
+      - name: Prepare sync branch
+        if: steps.detect.outputs.needed == 'true'
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          feature_sha='${{ steps.detect.outputs.feature_sha }}'
+          upstream_sha='${{ steps.detect.outputs.upstream_sha }}'
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git show-ref --verify --quiet "refs/remotes/origin/$SYNC_BRANCH" && \
+             git merge-base --is-ancestor "$feature_sha" "origin/$SYNC_BRANCH" && \
+             git merge-base --is-ancestor "$upstream_sha" "origin/$SYNC_BRANCH"; then
+            git switch --create "$SYNC_BRANCH" --track "origin/$SYNC_BRANCH"
+            echo "reused=true" >> "$GITHUB_OUTPUT"
+            echo "Existing sync branch already contains the current feature and upstream tips."
+            exit 0
+          fi
+
+          git switch --force-create "$SYNC_BRANCH" "$feature_sha"
+          echo "reused=false" >> "$GITHUB_OUTPUT"
+
+          if ! git merge --no-ff --no-edit upstream/master; then
+            conflicts=$(git diff --name-only --diff-filter=U)
+            echo "::error title=Upstream merge conflict::Manual resolution is required in the listed files. feature/page-curl was not modified."
+            echo "Conflicted files:"
+            printf '%s\n' "$conflicts"
+            {
+              echo "## Upstream merge conflict"
+              echo
+              echo 'The protected `feature/page-curl` branch was not modified.'
+              echo
+              echo "Conflicted files:"
+              echo '```text'
+              printf '%s\n' "$conflicts"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            git status --short
+            exit 1
+          fi
+
+      - name: Set up JDK
+        if: steps.detect.outputs.needed == 'true'
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          java-version: 21
+          distribution: temurin
+
+      - name: Set up Gradle
+        if: steps.detect.outputs.needed == 'true'
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Copy CI Gradle properties
+        if: steps.detect.outputs.needed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.gradle
+          cp .github/runner-files/ci-gradle.properties ~/.gradle/gradle.properties
+
+      - name: Build Standard debug APK
+        if: steps.detect.outputs.needed == 'true'
+        run: ./gradlew assembleStandardDebug
+
+      - name: Lint Standard debug APK
+        if: steps.detect.outputs.needed == 'true'
+        run: ./gradlew lintStandardDebug
+
+      - name: Check merged diff whitespace
+        if: steps.detect.outputs.needed == 'true'
+        shell: bash
+        run: git diff --check '${{ steps.detect.outputs.feature_sha }}..HEAD'
+
+      - name: Detect reader-sensitive upstream changes
+        if: steps.detect.outputs.needed == 'true'
+        id: risk
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed_files=$(git diff --name-only '${{ steps.detect.outputs.merge_base }}..${{ steps.detect.outputs.upstream_sha }}')
+          printf '%s\n' "$changed_files"
+
+          risk_pattern='(^|/)(PagerViewer|Pager|PagerPageHolder|PagerConfig|PagerViewerAdapter|ReaderPageImageView)\.kt$|app/src/main/java/eu/kanade/tachiyomi/ui/reader/settings/|app/src/main/java/eu/kanade/tachiyomi/ui/setting/SettingsReaderController\.kt$|app/src/main/java/eu/kanade/tachiyomi/data/preference/|(^|/)(build\.gradle\.kts|settings\.gradle\.kts|gradle\.properties|libs\.versions\.toml)$|^buildSrc/|^gradle/'
+          if grep -E -q "$risk_pattern" <<< "$changed_files"; then
+            echo "reader_changed=true" >> "$GITHUB_OUTPUT"
+            echo "Reader-sensitive upstream changes detected."
+          else
+            echo "reader_changed=false" >> "$GITHUB_OUTPUT"
+            echo "No reader-sensitive upstream changes detected."
+          fi
+
+      - name: Push sync branch
+        if: steps.detect.outputs.needed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ '${{ steps.prepare.outputs.reused }}' == 'true' ]]; then
+            git push origin "$SYNC_BRANCH"
+          else
+            git push --force-with-lease origin "$SYNC_BRANCH:$SYNC_BRANCH"
+          fi
+
+      - name: Create or update sync pull request
+        if: steps.detect.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          READER_CHANGED: ${{ steps.risk.outputs.reader_changed }}
+          FEATURE_SHA: ${{ steps.detect.outputs.feature_sha }}
+          UPSTREAM_SHA: ${{ steps.detect.outputs.upstream_sha }}
+          MERGE_BASE: ${{ steps.detect.outputs.merge_base }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          short_base=${MERGE_BASE:0:12}
+          short_upstream=${UPSTREAM_SHA:0:12}
+
+          if [[ "$READER_CHANGED" == "true" ]]; then
+            risk_notice='> **Reader code changed upstream — physical Page Curl regression testing required.**'
+          else
+            risk_notice='Reader-sensitive paths were not changed by this upstream range; Page Curl regression risk is lower.'
+          fi
+
+          cat > pr-body.md <<EOF
+          Automated merge of official TachiyomiJ2K upstream into the Page Curl feature branch.
+
+          $risk_notice
+
+          ## Upstream range
+
+          - Base: \`$short_base\`
+          - Upstream tip: \`$short_upstream\`
+          - Range: [\`$short_base..$short_upstream\`](https://github.com/Jays2Kings/tachiyomiJ2K/compare/$MERGE_BASE...$UPSTREAM_SHA)
+
+          ## Validation
+
+          - assembleStandardDebug: passed
+          - lintStandardDebug: passed
+          - git diff --check: passed
+
+          This pull request is intentionally not auto-merged. Review it and physically test Page Curl before merging when reader-sensitive files changed.
+          EOF
+
+          pr_number=$(gh pr list \
+            --base "$FEATURE_BRANCH" \
+            --head "$SYNC_BRANCH" \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [[ -n "$pr_number" ]]; then
+            gh pr edit "$pr_number" \
+              --title "Sync upstream TachiyomiJ2K" \
+              --body-file pr-body.md
+          else
+            gh pr create \
+              --base "$FEATURE_BRANCH" \
+              --head "$SYNC_BRANCH" \
+              --title "Sync upstream TachiyomiJ2K" \
+              --body-file pr-body.md
+          fi
