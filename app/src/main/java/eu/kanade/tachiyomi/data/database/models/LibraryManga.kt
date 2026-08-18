@@ -8,6 +8,9 @@ class LibraryManga : MangaImpl() {
 
     var bookmarkCount: Int = 0
 
+    /** Average normalized (10-point) score across the trackers this manga is scored on, or 0 if untracked/unscored. */
+    var score: Float = 0f
+
     val totalChapters
         get() = read + unread
 

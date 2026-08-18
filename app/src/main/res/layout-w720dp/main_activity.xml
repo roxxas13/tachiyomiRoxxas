@@ -249,6 +249,7 @@
         app:menuGravity="center"
         app:layout_constraintTop_toTopOf="parent"
         tools:headerLayout="@layout/side_nav_header"
+        app:expandedMinWidth="@dimen/nav_expand_min_width"
         app:menu="@menu/side_navigation" />
 
     <View

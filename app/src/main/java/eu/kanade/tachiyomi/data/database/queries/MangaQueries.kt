@@ -21,6 +21,7 @@ import eu.kanade.tachiyomi.data.database.tables.CategoryTable
 import eu.kanade.tachiyomi.data.database.tables.ChapterTable
 import eu.kanade.tachiyomi.data.database.tables.MangaCategoryTable
 import eu.kanade.tachiyomi.data.database.tables.MangaTable
+import eu.kanade.tachiyomi.data.database.tables.TrackTable
 
 interface MangaQueries : DbProvider {
     fun getMangas() =
@@ -42,7 +43,7 @@ interface MangaQueries : DbProvider {
                 RawQuery
                     .builder()
                     .query(libraryQuery)
-                    .observesTables(MangaTable.TABLE, ChapterTable.TABLE, MangaCategoryTable.TABLE, CategoryTable.TABLE)
+                    .observesTables(MangaTable.TABLE, ChapterTable.TABLE, MangaCategoryTable.TABLE, CategoryTable.TABLE, TrackTable.TABLE)
                     .build(),
             ).withGetResolver(LibraryMangaGetResolver.INSTANCE)
             .prepare()

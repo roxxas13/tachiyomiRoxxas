@@ -714,7 +714,7 @@ class StatsDetailsController :
                                 else -> categories
                             },
                         filterTags = if (selectedStat == Stats.TAG) arrayOf(name) else emptyArray(),
-                        filterTrackingScore = if (selectedStat == Stats.SCORE) id?.toInt() ?: -1 else 0,
+                        filterTrackingScore = if (selectedStat == Stats.SCORE) id?.toInt() ?: 0 else -1,
                         filterStartYear = if (selectedStat == Stats.START_YEAR) id?.toInt() ?: -1 else 0,
                     ).withFadeTransaction(),
                 )

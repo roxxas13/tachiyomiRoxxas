@@ -2162,6 +2162,7 @@ open class LibraryController(
                 minDateAddedMillis = presenter.earliestDateAdded,
                 showOptional = query.isNotBlank(),
                 seriesTypeOptions = presenter.availableSeriesTypes,
+                showScore = presenter.isLoggedIntoTracking,
                 onFieldSelected = { combinator, optional, field, separator, value ->
                     insertSearchToken(combinator, optional, field, separator, value)
                     dialog.dismiss()
