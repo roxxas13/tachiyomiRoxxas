@@ -1,0 +1,326 @@
+name: Release TachiyomiRoxxas
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "Version name (for example, 1.8.2 or 1.8.2-b01)"
+        required: true
+        type: string
+      version_code:
+        description: "Integer version code (for example, 114)"
+        required: true
+        type: string
+      prerelease:
+        description: "Publish as a prerelease"
+        required: true
+        default: false
+        type: boolean
+      release_notes:
+        description: "Optional release notes"
+        required: false
+        type: string
+
+concurrency:
+  group: tachiyomiroxxas-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Validate, sign, and publish
+    runs-on: ubuntu-24.04
+    env:
+      RELEASE_REPOSITORY: roxxas13/tachiyomiRoxxas
+      PACKAGE_ID: eu.kanade.tachiyomi.roxxas
+      EXPECTED_CERT_SHA256: BA:BF:F7:9B:BB:2A:2F:91:46:14:0F:B3:0F:7D:8C:9D:CD:0E:9D:8D:EB:12:F8:23:BC:DE:B9:40:90:58:39:7E
+      VERSION_NAME: ${{ inputs.version_name }}
+      VERSION_CODE: ${{ inputs.version_code }}
+      IS_PRERELEASE: ${{ inputs.prerelease }}
+      RELEASE_NOTES: ${{ inputs.release_notes }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out Page Curl release branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feature/page-curl
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          java-version: 21
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Copy CI Gradle properties
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.gradle
+          cp .github/runner-files/ci-gradle.properties ~/.gradle/gradle.properties
+
+      - name: Validate requested version and duplicates
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-b[0-9]+)?$ ]]; then
+            echo "version_name must match X.Y.Z or X.Y.Z-bNN."
+            exit 1
+          fi
+          if [[ ! "$VERSION_CODE" =~ ^[1-9][0-9]*$ ]]; then
+            echo "version_code must be a positive integer."
+            exit 1
+          fi
+          if [[ "$IS_PRERELEASE" == true && ! "$VERSION_NAME" =~ -b[0-9]+$ ]]; then
+            echo "Prerelease versions must use the X.Y.Z-bNN version format."
+            exit 1
+          fi
+          if [[ "$IS_PRERELEASE" != true && "$VERSION_NAME" =~ -b[0-9]+$ ]]; then
+            echo "A beta version must be published with prerelease enabled."
+            exit 1
+          fi
+
+          current_source_code=$(sed -nE 's/.*const val versionCode = ([0-9]+).*/\1/p' buildSrc/src/main/kotlin/Dependencies.kt)
+          if [[ -z "$current_source_code" || "$VERSION_CODE" -le "$current_source_code" ]]; then
+            echo "version_code must be greater than the source version code ($current_source_code)."
+            exit 1
+          fi
+
+          tag="v$VERSION_NAME"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists."
+            exit 1
+          fi
+          if gh api "repos/$RELEASE_REPOSITORY/releases/tags/$tag" >/dev/null 2>&1; then
+            echo "A GitHub Release for $tag already exists."
+            exit 1
+          fi
+
+          version_key() {
+            local version="$1" major minor patch suffix prerelease_rank
+            version="${version#v}"
+            IFS='.' read -r major minor patch <<< "${version%%-*}"
+            suffix="${version#${version%%-*}}"
+            if [[ -z "$suffix" ]]; then
+              prerelease_rank=999999999
+            else
+              prerelease_rank="${suffix#-b}"
+            fi
+            major=$((10#$major))
+            minor=$((10#$minor))
+            patch=$((10#$patch))
+            prerelease_rank=$((10#$prerelease_rank))
+            printf '%010d%010d%010d%010d' "$major" "$minor" "$patch" "$prerelease_rank"
+          }
+
+          requested_key=$(version_key "$VERSION_NAME")
+          latest_name=""
+          latest_key=""
+          latest_tag=""
+          while IFS= read -r release_tag; do
+            if [[ "$release_tag" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+(-b[0-9]+)?)$ ]]; then
+              candidate_name="${BASH_REMATCH[1]}"
+              candidate_key=$(version_key "$candidate_name")
+              if [[ -z "$latest_key" || "$candidate_key" > "$latest_key" ]]; then
+                latest_name="$candidate_name"
+                latest_key="$candidate_key"
+                latest_tag="$release_tag"
+              fi
+            fi
+          done < <(gh api --paginate "repos/$RELEASE_REPOSITORY/releases?per_page=100" --jq '.[] | select(.draft == false) | .tag_name')
+
+          if [[ -n "$latest_key" && ( "$requested_key" < "$latest_key" || "$requested_key" == "$latest_key" ) ]]; then
+            echo "version_name must be newer than the latest published release ($latest_name)."
+            exit 1
+          fi
+
+          if [[ -n "$latest_tag" ]]; then
+            latest_asset=$(gh api "repos/$RELEASE_REPOSITORY/releases/tags/$latest_tag" --jq '[.assets[].name | select(endswith(".apk"))][0] // empty')
+            if [[ -z "$latest_asset" ]]; then
+              echo "Latest release $latest_tag has no APK from which to verify its version code."
+              exit 1
+            fi
+            latest_dir=$(mktemp -d)
+            trap 'rm -rf "$latest_dir"' EXIT
+            gh release download "$latest_tag" --repo "$RELEASE_REPOSITORY" --pattern "$latest_asset" --dir "$latest_dir"
+            build_tools_version=$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -1)
+            aapt2="$ANDROID_SDK_ROOT/build-tools/$build_tools_version/aapt2"
+            test -x "$aapt2"
+            latest_package_line=$($aapt2 dump badging "$latest_dir/$latest_asset" | sed -n '1p')
+            latest_code=$(sed -nE "s/.*versionCode='([^']+)'.*/\1/p" <<< "$latest_package_line")
+            if [[ ! "$latest_code" =~ ^[0-9]+$ || "$VERSION_CODE" -le "$latest_code" ]]; then
+              echo "version_code must be greater than the latest published release code ($latest_code)."
+              exit 1
+            fi
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Inject release version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_file=buildSrc/src/main/kotlin/Dependencies.kt
+          sed -i -E "s/(const val versionCode = )[0-9]+/\1$VERSION_CODE/" "$version_file"
+          sed -i -E "s/(const val versionName = )\"[^\"]+\"/\1\"$VERSION_NAME\"/" "$version_file"
+          grep -Fx "    const val versionCode = $VERSION_CODE" "$version_file" >/dev/null
+          grep -Fx "    const val versionName = \"$VERSION_NAME\"" "$version_file" >/dev/null
+
+      - name: Run unit tests
+        run: ./gradlew testStandardDebugUnitTest
+
+      - name: Run Android lint
+        run: ./gradlew lintStandardDebug
+
+      - name: Build unsigned Standard Release APKs
+        run: ./gradlew assembleStandardRelease
+
+      - name: Check patch whitespace
+        run: git diff --check
+
+      - name: Locate Android signing and inspection tools
+        id: android-tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_tools_version=$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -1)
+          tools_dir="$ANDROID_SDK_ROOT/build-tools/$build_tools_version"
+          test -x "$tools_dir/apksigner"
+          test -x "$tools_dir/aapt2"
+          echo "apksigner=$tools_dir/apksigner" >> "$GITHUB_OUTPUT"
+          echo "aapt2=$tools_dir/aapt2" >> "$GITHUB_OUTPUT"
+
+      - name: Restore key, sign APKs, and verify certificate
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_ALIAS: ${{ secrets.ALIAS }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          APKSIGNER: ${{ steps.android-tools.outputs.apksigner }}
+        run: |
+          set -euo pipefail
+          umask 077
+          keystore=$(mktemp --suffix=.jks)
+          trap 'rm -f "$keystore"' EXIT
+          printf '%s' "$SIGNING_KEY" | base64 --decode > "$keystore"
+
+          mkdir -p release-assets
+          declare -A source_apks=(
+            [universal]="app/build/outputs/apk/standard/release/app-standard-universal-release-unsigned.apk"
+            [arm64-v8a]="app/build/outputs/apk/standard/release/app-standard-arm64-v8a-release-unsigned.apk"
+            [armeabi-v7a]="app/build/outputs/apk/standard/release/app-standard-armeabi-v7a-release-unsigned.apk"
+            [x86]="app/build/outputs/apk/standard/release/app-standard-x86-release-unsigned.apk"
+            [x86_64]="app/build/outputs/apk/standard/release/app-standard-x86_64-release-unsigned.apk"
+          )
+
+          expected_digest=$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          for variant in universal arm64-v8a armeabi-v7a x86 x86_64; do
+            source_apk="${source_apks[$variant]}"
+            test -f "$source_apk"
+            if [[ "$variant" == universal ]]; then
+              output_apk="release-assets/tachiyomij2k-v$VERSION_NAME.apk"
+            else
+              output_apk="release-assets/tachiyomij2k-$variant-v$VERSION_NAME.apk"
+            fi
+
+            "$APKSIGNER" sign \
+              --ks "$keystore" \
+              --ks-key-alias "$SIGNING_ALIAS" \
+              --ks-pass env:SIGNING_STORE_PASSWORD \
+              --key-pass env:SIGNING_KEY_PASSWORD \
+              --out "$output_apk" \
+              "$source_apk"
+
+            verification=$($APKSIGNER verify --verbose --print-certs "$output_apk")
+            printf '%s\n' "$verification"
+            actual_digest=$(printf '%s\n' "$verification" | sed -nE 's/^Signer #1 certificate SHA-256 digest: //p' | head -1 | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
+            if [[ -z "$actual_digest" || "$actual_digest" != "$expected_digest" ]]; then
+              echo "Signing certificate mismatch for $output_apk."
+              exit 1
+            fi
+          done
+
+      - name: Verify package ID and embedded versions
+        shell: bash
+        env:
+          AAPT2: ${{ steps.android-tools.outputs.aapt2 }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apks=(release-assets/*.apk)
+          if [[ ${#apks[@]} -ne 5 ]]; then
+            echo "Expected exactly five signed APKs, found ${#apks[@]}."
+            exit 1
+          fi
+
+          for apk in "${apks[@]}"; do
+            package_line=$($AAPT2 dump badging "$apk" | sed -n '1p')
+            actual_package=$(sed -nE "s/.*name='([^']+)'.*/\1/p" <<< "$package_line")
+            actual_code=$(sed -nE "s/.*versionCode='([^']+)'.*/\1/p" <<< "$package_line")
+            actual_name=$(sed -nE "s/.*versionName='([^']+)'.*/\1/p" <<< "$package_line")
+            if [[ "$actual_package" != "$PACKAGE_ID" || "$actual_code" != "$VERSION_CODE" || "$actual_name" != "$VERSION_NAME" ]]; then
+              echo "Package/version verification failed for $apk."
+              echo "Found package=$actual_package versionCode=$actual_code versionName=$actual_name"
+              exit 1
+            fi
+          done
+
+      - name: Generate release body and checksums
+        id: release-body
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.version.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          body_file="$RUNNER_TEMP/release-body.md"
+          {
+            if [[ -n "$RELEASE_NOTES" ]]; then
+              printf '%s\n\n' "$RELEASE_NOTES"
+            fi
+            printf 'Source commit: `%s`\n\n' "$SOURCE_SHA"
+            printf 'Package ID: `%s`\n\n' "$PACKAGE_ID"
+            printf 'Signing certificate SHA-256: `%s`\n\n' "$EXPECTED_CERT_SHA256"
+            printf '### Checksums\n\n'
+            printf '| APK | SHA-256 |\n'
+            printf '| --- | --- |\n'
+            for apk in release-assets/*.apk; do
+              checksum=$(sha256sum "$apk" | cut -d ' ' -f1)
+              printf '| `%s` | `%s` |\n' "$(basename "$apk")" "$checksum"
+            done
+          } > "$body_file"
+          echo "path=$body_file" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          SOURCE_SHA: ${{ steps.version.outputs.source_sha }}
+          BODY_FILE: ${{ steps.release-body.outputs.path }}
+        run: |
+          set -euo pipefail
+          args=(
+            release create "$TAG"
+            release-assets/tachiyomij2k-v"$VERSION_NAME".apk
+            release-assets/tachiyomij2k-arm64-v8a-v"$VERSION_NAME".apk
+            release-assets/tachiyomij2k-armeabi-v7a-v"$VERSION_NAME".apk
+            release-assets/tachiyomij2k-x86-v"$VERSION_NAME".apk
+            release-assets/tachiyomij2k-x86_64-v"$VERSION_NAME".apk
+            --repo "$RELEASE_REPOSITORY"
+            --target "$SOURCE_SHA"
+            --title "TachiyomiRoxxas $TAG"
+            --notes-file "$BODY_FILE"
+          )
+          if [[ "$IS_PRERELEASE" == true ]]; then
+            args+=(--prerelease)
+          fi
+          gh "${args[@]}"
