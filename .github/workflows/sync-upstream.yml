@@ -167,10 +167,22 @@ jobs:
             git push --force-with-lease origin "$SYNC_BRANCH:$SYNC_BRANCH"
           fi
 
+      - name: Confirm pull request repository
+        if: steps.detect.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "PR repository: $PR_REPOSITORY"
+          gh repo view "$PR_REPOSITORY" --json nameWithOwner
+
       - name: Create or update sync pull request
         if: steps.detect.outputs.needed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_REPOSITORY: ${{ github.repository }}
           READER_CHANGED: ${{ steps.risk.outputs.reader_changed }}
           FEATURE_SHA: ${{ steps.detect.outputs.feature_sha }}
           UPSTREAM_SHA: ${{ steps.detect.outputs.upstream_sha }}
@@ -208,6 +220,7 @@ jobs:
           EOF
 
           pr_number=$(gh pr list \
+            --repo "$PR_REPOSITORY" \
             --base "$FEATURE_BRANCH" \
             --head "$SYNC_BRANCH" \
             --state open \
@@ -216,10 +229,12 @@ jobs:
 
           if [[ -n "$pr_number" ]]; then
             gh pr edit "$pr_number" \
+              --repo "$PR_REPOSITORY" \
               --title "Sync upstream TachiyomiJ2K" \
               --body-file pr-body.md
           else
             gh pr create \
+              --repo "$PR_REPOSITORY" \
               --base "$FEATURE_BRANCH" \
               --head "$SYNC_BRANCH" \
               --title "Sync upstream TachiyomiJ2K" \
