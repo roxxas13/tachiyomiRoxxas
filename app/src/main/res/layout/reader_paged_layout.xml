@@ -105,13 +105,13 @@
             android:text="@string/crop_borders"
             android:textColor="?attr/colorOnBackground" />
 
-        <com.google.android.material.materialswitch.MaterialSwitch
+        <eu.kanade.tachiyomi.widget.MaterialSpinnerView
             android:id="@+id/page_transitions"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="@string/animate_page_transitions"
-            android:textColor="?attr/colorOnBackground" />
+            android:entries="@array/page_transitions"
+            app:title="@string/page_transition" />
 
         <!-- Webtoon Prefs -->
         <eu.kanade.tachiyomi.widget.MaterialSpinnerView

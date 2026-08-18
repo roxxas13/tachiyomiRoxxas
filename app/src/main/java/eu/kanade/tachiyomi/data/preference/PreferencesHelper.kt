@@ -21,6 +21,7 @@ import eu.kanade.tachiyomi.ui.library.LibraryItem
 import eu.kanade.tachiyomi.ui.library.filter.FilterBottomSheet
 import eu.kanade.tachiyomi.ui.reader.settings.OrientationType
 import eu.kanade.tachiyomi.ui.reader.settings.PageLayout
+import eu.kanade.tachiyomi.ui.reader.settings.PageTransition
 import eu.kanade.tachiyomi.ui.reader.settings.ReaderBottomButton
 import eu.kanade.tachiyomi.ui.reader.settings.ReadingModeType
 import eu.kanade.tachiyomi.ui.reader.viewer.ViewerNavigation
@@ -136,6 +137,15 @@ class PreferencesHelper(
     fun darkTheme() = flowPrefs.getEnum(Keys.darkTheme, if (supportsDynamic) Themes.MONET else Themes.DEFAULT)
 
     fun pageTransitions() = flowPrefs.getBoolean(Keys.enableTransitions, true)
+
+    fun pageTransitionMode(): Preference<PageTransition> {
+        val legacyMode = if (pageTransitions().get()) PageTransition.SLIDE else PageTransition.NONE
+        return flowPrefs.getEnum(Keys.pageTransitionMode, legacyMode).also {
+            if (!prefs.contains(Keys.pageTransitionMode)) {
+                it.set(legacyMode)
+            }
+        }
+    }
 
     fun pagerCutoutBehavior() = flowPrefs.getInt(Keys.pagerCutoutBehavior, 0)
 

@@ -158,6 +158,7 @@ dependencies {
     implementation("androidx.palette:palette:1.0.0")
     implementation("androidx.activity:activity-ktx:1.13.0")
     implementation("androidx.core:core-ktx:1.19.0")
+    debugImplementation("androidx.documentfile:documentfile:1.1.0")
     implementation("com.google.android.flexbox:flexbox:3.0.0")
     implementation("androidx.window:window:1.5.1")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.2.0")

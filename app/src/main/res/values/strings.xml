@@ -448,6 +448,9 @@
     <!-- Reader settings -->
     <string name="fullscreen">Fullscreen</string>
     <string name="animate_page_transitions">Animate page transitions</string>
+    <string name="page_transition">Page transition</string>
+    <string name="slide">Slide</string>
+    <string name="page_curl">Page curl</string>
     <string name="enable_zoom_out">Enable zoom out</string>
     <string name="double_tap_anim_speed">Double tap animation speed</string>
     <string name="show_page_number">Show page number</string>

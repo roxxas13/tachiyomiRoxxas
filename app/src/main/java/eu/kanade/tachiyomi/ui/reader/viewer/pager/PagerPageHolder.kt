@@ -159,6 +159,7 @@ class PagerPageHolder(
             }
         }
         onImageDecoded()
+        viewer.onCurlPageReady()
     }
 
     override fun onNeedsLandscapeZoom() {
@@ -320,6 +321,11 @@ class PagerPageHolder(
     fun isZoomedIn(): Boolean {
         val view = pageView as? SubsamplingScaleImageView ?: return false
         return view.scale > view.minScale + 0.01f
+    }
+
+    fun curlScaleState(): PagerCurlScaleState {
+        val view = pageView as? SubsamplingScaleImageView
+        return PagerCurlScaleState(view?.scale, view?.minScale)
     }
 
     /**
@@ -1044,6 +1050,14 @@ class PagerPageHolder(
         } else {
             0 + (context.resources.configuration?.orientation ?: 0) * 10
         } + item.hashCode()
+}
+
+data class PagerCurlScaleState(
+    val current: Float?,
+    val minimum: Float?,
+) {
+    val isClearlyZoomed: Boolean
+        get() = current != null && minimum != null && current > minimum * 1.02f
 }
 
 private const val ZOOM_STEP = 1.25f

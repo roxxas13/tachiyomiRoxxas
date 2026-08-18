@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string-array name="page_transitions">
+        <item>@string/none</item>
+        <item>@string/slide</item>
+        <item>@string/page_curl</item>
+    </string-array>
 
     <string-array name="viewers_selector">
         <item>@string/default_value</item>

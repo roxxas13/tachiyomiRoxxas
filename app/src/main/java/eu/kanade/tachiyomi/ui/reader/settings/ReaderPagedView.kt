@@ -41,7 +41,7 @@ class ReaderPagedView
                 binding.landscapeZoom.bindToPreference(preferences.landscapeZoom())
                 zoomStart.bindToPreference(preferences.zoomStart(), 1)
                 cropBorders.bindToPreference(preferences.cropBorders())
-                pageTransitions.bindToPreference(preferences.pageTransitions())
+                pageTransitions.bindToPreference(preferences.pageTransitionMode())
                 pagerNav.bindToPreference(preferences.navigationModePager())
                 pagerInvert.bindToPreference(preferences.pagerNavInverted())
                 extendPastCutout.bindToPreference(preferences.pagerCutoutBehavior())

@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.ui.reader.viewer.pager
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
 import eu.kanade.tachiyomi.ui.reader.settings.PageLayout
+import eu.kanade.tachiyomi.ui.reader.settings.PageTransition
 import eu.kanade.tachiyomi.ui.reader.viewer.ViewerConfig
 import eu.kanade.tachiyomi.ui.reader.viewer.ViewerNavigation
 import eu.kanade.tachiyomi.ui.reader.viewer.navigation.DisabledNavigation
@@ -25,7 +26,7 @@ class PagerConfig(
     private val viewer: PagerViewer,
     preferences: PreferencesHelper = Injekt.get(),
 ) : ViewerConfig(preferences, scope) {
-    var usePageTransitions = false
+    var pageTransition = PageTransition.SLIDE
         private set
 
     var imageScaleType = 1
@@ -72,7 +73,13 @@ class PagerConfig(
     var autoSplitPages = preferences.automaticSplitsPage().get()
 
     init {
-        preferences.pageTransitions().register({ usePageTransitions = it })
+        preferences.pageTransitionMode().register(
+            { pageTransition = it },
+            {
+                pageTransition = it
+                pageTransitionChangedListener?.invoke()
+            },
+        )
 
         preferences.fullscreen().register({ isFullscreen = it })
 
@@ -218,6 +225,8 @@ class PagerConfig(
         Center,
         Right,
     }
+
+    var pageTransitionChangedListener: (() -> Unit)? = null
 
     companion object {
         const val CUTOUT_PAD = 0

@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.data.preference.asImmediateFlow
 import eu.kanade.tachiyomi.data.preference.asImmediateFlowIn
 import eu.kanade.tachiyomi.ui.reader.settings.OrientationType
 import eu.kanade.tachiyomi.ui.reader.settings.PageLayout
+import eu.kanade.tachiyomi.ui.reader.settings.PageTransition
 import eu.kanade.tachiyomi.ui.reader.settings.ReaderBackgroundColor
 import eu.kanade.tachiyomi.ui.reader.settings.ReaderBottomButton
 import eu.kanade.tachiyomi.ui.reader.settings.ReadingModeType
@@ -57,10 +58,11 @@ class SettingsReaderController : SettingsController() {
                     // min is 1
                     defaultValue = 500
                 }
-                switchPreference {
-                    key = Keys.enableTransitions
-                    titleRes = R.string.animate_page_transitions
-                    defaultValue = true
+                listPreference(activity) {
+                    bindTo(preferences.pageTransitionMode())
+                    titleRes = R.string.page_transition
+                    entriesRes = PageTransition.entries.map { it.stringRes }.toTypedArray()
+                    entryValues = PageTransition.entries.map { it.name }
                 }
                 multiSelectListPreferenceMat(activity) {
                     key = Keys.readerBottomButtons

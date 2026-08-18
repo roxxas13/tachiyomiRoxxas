@@ -27,6 +27,11 @@ open class Pager(
      */
     var longTapListener: ((MotionEvent) -> Boolean)? = null
 
+    /** Gives an optional pager-only renderer first refusal of a complete touch sequence. */
+    var pageTransitionTouchHandler: ((MotionEvent) -> PageTransitionTouchResult)? = null
+
+    private var pageTransitionTouchState = PageTransitionTouchResult.REJECTED
+
     var isRestoring = false
 
     override fun onRestoreInstanceState(state: Parcelable?) {
@@ -69,6 +74,28 @@ open class Pager(
      * Dispatches a touch event.
      */
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+            pageTransitionTouchState = pageTransitionTouchHandler?.invoke(ev) ?: PageTransitionTouchResult.REJECTED
+        } else if (pageTransitionTouchState != PageTransitionTouchResult.REJECTED) {
+            val previousState = pageTransitionTouchState
+            pageTransitionTouchState = pageTransitionTouchHandler?.invoke(ev) ?: PageTransitionTouchResult.REJECTED
+            if (previousState == PageTransitionTouchResult.PENDING &&
+                pageTransitionTouchState == PageTransitionTouchResult.CLAIMED
+            ) {
+                // ViewPager and its image child already received DOWN. Cancel their sequence before
+                // the move that crossed slop can start the stock pager animation.
+                val cancel = MotionEvent.obtain(ev).apply { action = MotionEvent.ACTION_CANCEL }
+                super.dispatchTouchEvent(cancel)
+                gestureDetector.onTouchEvent(cancel)
+                cancel.recycle()
+            }
+        }
+        if (pageTransitionTouchState == PageTransitionTouchResult.CLAIMED) {
+            if (ev.actionMasked == MotionEvent.ACTION_UP || ev.actionMasked == MotionEvent.ACTION_CANCEL) {
+                pageTransitionTouchState = PageTransitionTouchResult.REJECTED
+            }
+            return true
+        }
         val handled = super.dispatchTouchEvent(ev)
         if (isGestureDetectorEnabled) {
             gestureDetector.onTouchEvent(ev)
@@ -113,4 +140,10 @@ open class Pager(
     fun setGestureDetectorEnabled(enabled: Boolean) {
         isGestureDetectorEnabled = enabled
     }
+}
+
+enum class PageTransitionTouchResult {
+    REJECTED,
+    PENDING,
+    CLAIMED,
 }
