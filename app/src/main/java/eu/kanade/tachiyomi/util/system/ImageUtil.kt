@@ -9,7 +9,10 @@ import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
 import android.graphics.Rect
+import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
@@ -462,6 +465,7 @@ object ImageUtil {
         @ColorInt background: Int = Color.WHITE,
         hingeGap: Int = 0,
         context: Context? = null,
+        bookSpread: Boolean = false,
         progressCallback: ((Int) -> Unit)? = null,
     ): ByteArrayInputStream {
         var imageBitmap = iBitmap
@@ -513,12 +517,44 @@ object ImageUtil {
                 height2 + (maxHeight - height2) / 2,
             )
         canvas.drawBitmap(imageBitmap2, imageBitmap2.rect, bottomPart, null)
+        if (bookSpread) {
+            drawBookSpine(canvas, maxWidth + adjustedHingeGap / 2f, maxWidth, maxHeight)
+        }
         progressCallback?.invoke(99)
 
         val output = ByteArrayOutputStream()
         result.compress(Bitmap.CompressFormat.JPEG, 100, output)
         progressCallback?.invoke(100)
         return ByteArrayInputStream(output.toByteArray())
+    }
+
+    private fun drawBookSpine(
+        canvas: Canvas,
+        centerX: Float,
+        pageWidth: Int,
+        height: Int,
+    ) {
+        val radius = min(pageWidth * 0.018f, height * 0.01f).coerceAtLeast(2f)
+        val paint =
+            Paint().apply {
+                shader =
+                    LinearGradient(
+                        centerX - radius,
+                        0f,
+                        centerX + radius,
+                        0f,
+                        intArrayOf(
+                            Color.TRANSPARENT,
+                            Color.argb(28, 0, 0, 0),
+                            Color.argb(88, 0, 0, 0),
+                            Color.argb(28, 0, 0, 0),
+                            Color.TRANSPARENT,
+                        ),
+                        floatArrayOf(0f, 0.4f, 0.5f, 0.6f, 1f),
+                        Shader.TileMode.CLAMP,
+                    )
+            }
+        canvas.drawRect(centerX - radius, 0f, centerX + radius, height.toFloat(), paint)
     }
 
     fun padSingleImage(
