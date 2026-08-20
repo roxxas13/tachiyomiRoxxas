@@ -116,6 +116,7 @@
         <item>@string/double_pages</item>
         <item>@string/automatic</item>
         <item>@string/split_double_pages</item>
+        <item>@string/book_spread</item>
     </string-array>
 
     <string-array name="webtoon_page_layouts">

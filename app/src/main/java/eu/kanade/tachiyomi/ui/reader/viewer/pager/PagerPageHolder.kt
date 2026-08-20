@@ -23,6 +23,7 @@ import eu.kanade.tachiyomi.databinding.ReaderErrorBinding
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
 import eu.kanade.tachiyomi.ui.reader.settings.ReaderBackgroundColor
+import eu.kanade.tachiyomi.ui.reader.settings.SpreadPresentation
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderErrorView
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerConfig.ZoomType
@@ -952,7 +953,15 @@ class PagerPageHolder(
         if (extraPage == null) {
             return supportHingeIfThere(imageBytes.inputStream())
         }
-        return ImageUtil.mergeBitmaps(imageBitmap, imageBitmap2, isLTR, bg, viewer.config.hingeGapSize, context) {
+        return ImageUtil.mergeBitmaps(
+            imageBitmap,
+            imageBitmap2,
+            isLTR,
+            bg,
+            viewer.config.hingeGapSize,
+            context,
+            viewer.config.spreadPresentation == SpreadPresentation.BOOK,
+        ) {
             scope.launchUI {
                 if (it == 100) {
                     setProgress(100)

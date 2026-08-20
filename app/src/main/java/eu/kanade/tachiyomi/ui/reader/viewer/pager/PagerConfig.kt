@@ -4,6 +4,7 @@ import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
 import eu.kanade.tachiyomi.ui.reader.settings.PageLayout
 import eu.kanade.tachiyomi.ui.reader.settings.PageTransition
+import eu.kanade.tachiyomi.ui.reader.settings.SpreadPresentation
 import eu.kanade.tachiyomi.ui.reader.viewer.ViewerConfig
 import eu.kanade.tachiyomi.ui.reader.viewer.ViewerNavigation
 import eu.kanade.tachiyomi.ui.reader.viewer.navigation.DisabledNavigation
@@ -58,13 +59,24 @@ class PagerConfig(
 
     var shiftDoublePage = false
 
-    var doublePages = preferences.pageLayout().get() == PageLayout.DOUBLE_PAGES.value
+    var doublePages =
+        preferences.pageLayout().get().let {
+            it == PageLayout.DOUBLE_PAGES.value || it == PageLayout.BOOK_SPREAD.value
+        }
         set(value) {
             field = value
             if (!value) {
                 shiftDoublePage = false
             }
         }
+
+    var spreadPresentation =
+        if (preferences.pageLayout().get() == PageLayout.BOOK_SPREAD.value) {
+            SpreadPresentation.BOOK
+        } else {
+            SpreadPresentation.STANDARD
+        }
+        internal set
 
     var hingeGapSize = 0
 
@@ -154,8 +166,10 @@ class PagerConfig(
             .onEach {
                 autoDoublePages = it == PageLayout.AUTOMATIC.value
                 splitPages = it == PageLayout.SPLIT_PAGES.value
+                spreadPresentation =
+                    if (it == PageLayout.BOOK_SPREAD.value) SpreadPresentation.BOOK else SpreadPresentation.STANDARD
                 if (!autoDoublePages) {
-                    doublePages = it == PageLayout.DOUBLE_PAGES.value
+                    doublePages = it == PageLayout.DOUBLE_PAGES.value || it == PageLayout.BOOK_SPREAD.value
                 }
                 reloadChapterListener?.invoke(doublePages)
             }.launchIn(scope)
@@ -163,8 +177,10 @@ class PagerConfig(
             .pageLayout()
             .register({
                 autoDoublePages = it == PageLayout.AUTOMATIC.value
+                spreadPresentation =
+                    if (it == PageLayout.BOOK_SPREAD.value) SpreadPresentation.BOOK else SpreadPresentation.STANDARD
                 if (!autoDoublePages) {
-                    doublePages = it == PageLayout.DOUBLE_PAGES.value
+                    doublePages = it == PageLayout.DOUBLE_PAGES.value || it == PageLayout.BOOK_SPREAD.value
                     splitPages = it == PageLayout.SPLIT_PAGES.value
                 }
             })

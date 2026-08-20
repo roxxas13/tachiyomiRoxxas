@@ -57,6 +57,13 @@ class AboutController : SettingsController() {
             titleRes = R.string.about
 
             preference {
+                key = "pref_app_identity"
+                titleRes = R.string.app_name
+                summary = context.getString(R.string.based_on_tachiyomi_j2k)
+                isSelectable = false
+            }
+
+            preference {
                 key = "pref_whats_new"
                 titleRes = R.string.whats_new_this_release
                 onClick {

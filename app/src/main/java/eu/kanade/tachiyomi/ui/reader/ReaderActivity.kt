@@ -104,6 +104,7 @@ import eu.kanade.tachiyomi.ui.reader.settings.OrientationType
 import eu.kanade.tachiyomi.ui.reader.settings.PageLayout
 import eu.kanade.tachiyomi.ui.reader.settings.ReaderBottomButton
 import eu.kanade.tachiyomi.ui.reader.settings.ReadingModeType
+import eu.kanade.tachiyomi.ui.reader.settings.SpreadPresentation
 import eu.kanade.tachiyomi.ui.reader.settings.TabbedReaderSettingsSheet
 import eu.kanade.tachiyomi.ui.reader.viewer.BaseViewer
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.L2RPagerViewer
@@ -595,6 +596,7 @@ class ReaderActivity : BaseActivity<ReaderActivityBinding>() {
     fun setBottomNavButtons(pageLayout: Int) {
         val isDoublePage =
             pageLayout == PageLayout.DOUBLE_PAGES.value ||
+                pageLayout == PageLayout.BOOK_SPREAD.value ||
                 (pageLayout == PageLayout.AUTOMATIC.value && (viewer as? PagerViewer)?.config?.doublePages ?: false)
         binding.chaptersSheet.doublePage.icon =
             ContextCompat.getDrawable(
@@ -1461,6 +1463,7 @@ class ReaderActivity : BaseActivity<ReaderActivityBinding>() {
             val config = (viewer as? PagerViewer)?.config
             val selectedId =
                 when {
+                    config?.doublePages == true && config.spreadPresentation == SpreadPresentation.BOOK -> PageLayout.BOOK_SPREAD
                     config?.doublePages == true -> PageLayout.DOUBLE_PAGES
                     config?.splitPages == true -> PageLayout.SPLIT_PAGES
                     else -> PageLayout.SINGLE_PAGE
@@ -1470,6 +1473,7 @@ class ReaderActivity : BaseActivity<ReaderActivityBinding>() {
                     listOf(
                         PageLayout.SINGLE_PAGE,
                         PageLayout.DOUBLE_PAGES,
+                        PageLayout.BOOK_SPREAD,
                         PageLayout.SPLIT_PAGES,
                     ).map { it.value to it.stringRes },
                 selectedItemId = selectedId.value,
@@ -1478,7 +1482,11 @@ class ReaderActivity : BaseActivity<ReaderActivityBinding>() {
 
                 if (preferences.pageLayout().get() == PageLayout.AUTOMATIC.value) {
                     (viewer as? PagerViewer)?.config?.let { config ->
-                        config.doublePages = newLayout == PageLayout.DOUBLE_PAGES
+                        config.spreadPresentation =
+                            if (newLayout == PageLayout.BOOK_SPREAD) SpreadPresentation.BOOK else SpreadPresentation.STANDARD
+                        config.doublePages =
+                            newLayout == PageLayout.DOUBLE_PAGES ||
+                            newLayout == PageLayout.BOOK_SPREAD
                         if (newLayout == PageLayout.SINGLE_PAGE) {
                             preferences.automaticSplitsPage().set(false)
                         } else if (newLayout == PageLayout.SPLIT_PAGES) {
