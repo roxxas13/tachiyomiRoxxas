@@ -27,6 +27,10 @@ class LibraryListHolder(
 ) : LibraryHolder(view, adapter) {
     private val binding = MangaListItemBinding.bind(view)
 
+    init {
+        binding.unreadDownloadBadge.badgeView.libraryColors = adapter.colors
+    }
+
     /**
      * Method called from [LibraryCategoryAdapter.onBindViewHolder]. It updates the data for this
      * holder with the given manga.

@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.util.system
 
+import android.app.Activity
 import android.app.ActivityManager
 import android.app.ActivityOptions
+import android.app.Application
 import android.app.LocaleManager
 import android.app.Notification
 import android.app.NotificationManager
@@ -18,8 +20,10 @@ import android.net.NetworkCapabilities
 import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.View
 import android.widget.Toast
@@ -140,25 +144,65 @@ fun Context.contextCompatDrawable(
  * Converts to dp.
  */
 val Int.pxToDp: Int
-    get() = (this / Resources.getSystem().displayMetrics.density).toInt()
+    get() = (this / currentDisplayMetrics.density).toInt()
 
 val Float.pxToDp: Float
-    get() = (this / Resources.getSystem().displayMetrics.density)
+    get() = (this / currentDisplayMetrics.density)
 
 /**
  * Converts to px.
  */
 val Int.dpToPx: Int
-    get() = (this * Resources.getSystem().displayMetrics.density).toInt()
+    get() = (this * currentDisplayMetrics.density).toInt()
 
 val Int.spToPx: Int
     get() = this.toFloat().spToPx.toInt()
 
 val Float.dpToPx: Float
-    get() = (this * Resources.getSystem().displayMetrics.density)
+    get() = (this * currentDisplayMetrics.density)
 
 val Float.spToPx: Float
-    get() = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, this, Resources.getSystem().displayMetrics)
+    get() = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, this, currentDisplayMetrics)
+
+/**
+ * Resources.getSystem() (used above until this was tracked) always reflects the phone's own
+ * default display, never whatever display the app window actually ends up on - so on a device
+ * where the app is moved to an external monitor with a different density, every dp/sp conversion
+ * above would silently use the wrong one. [registerCurrentActivityTracker] keeps this pointed at
+ * whichever activity is actually in the foreground instead.
+ */
+private var currentDisplayMetrics: DisplayMetrics = Resources.getSystem().displayMetrics
+
+/** Call once from Application.onCreate. */
+fun Application.registerCurrentActivityTracker() {
+    registerActivityLifecycleCallbacks(
+        object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityCreated(
+                activity: Activity,
+                savedInstanceState: Bundle?,
+            ) {
+                currentDisplayMetrics = activity.resources.displayMetrics
+            }
+
+            override fun onActivityResumed(activity: Activity) {
+                currentDisplayMetrics = activity.resources.displayMetrics
+            }
+
+            override fun onActivityStarted(activity: Activity) {}
+
+            override fun onActivityPaused(activity: Activity) {}
+
+            override fun onActivityStopped(activity: Activity) {}
+
+            override fun onActivitySaveInstanceState(
+                activity: Activity,
+                outState: Bundle,
+            ) {}
+
+            override fun onActivityDestroyed(activity: Activity) {}
+        },
+    )
+}
 
 /** Converts to px and takes into account LTR/RTL layout */
 fun Float.dpToPxEnd(resources: Resources): Float = this * resources.displayMetrics.density * if (resources.isLTR) 1 else -1

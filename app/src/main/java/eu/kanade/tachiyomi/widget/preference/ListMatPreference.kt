@@ -74,6 +74,7 @@ open class ListMatPreference
                             notifyChanged()
                         } else {
                             sharedPreferences?.edit { putString(key, value) }
+                            notifyChanged()
                         }
                     } else {
                         tempValue = pos
@@ -81,7 +82,6 @@ open class ListMatPreference
                         notifyChanged()
                     }
                 }
-                this@ListMatPreference.summary = this@ListMatPreference.summary
                 dialog.dismiss()
             }
         }

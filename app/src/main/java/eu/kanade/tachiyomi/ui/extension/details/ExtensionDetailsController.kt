@@ -37,9 +37,11 @@ import eu.kanade.tachiyomi.source.sourcePreferences
 import eu.kanade.tachiyomi.ui.base.controller.BaseCoroutineController
 import eu.kanade.tachiyomi.ui.setting.DSL
 import eu.kanade.tachiyomi.ui.setting.defaultValue
+import eu.kanade.tachiyomi.ui.setting.iconRes
+import eu.kanade.tachiyomi.ui.setting.iconTint
 import eu.kanade.tachiyomi.ui.setting.onChange
-import eu.kanade.tachiyomi.ui.setting.switchPreference
 import eu.kanade.tachiyomi.util.system.LocaleHelper
+import eu.kanade.tachiyomi.util.system.getResourceColor
 import eu.kanade.tachiyomi.util.view.openInBrowser
 import eu.kanade.tachiyomi.util.view.scrollViewWith
 import eu.kanade.tachiyomi.util.view.snack
@@ -117,6 +119,8 @@ class ExtensionDetailsController(
         manager.onDisplayPreferenceDialogListener = this
         val screen = manager.createPreferenceScreen(themedContext)
         preferenceScreen = screen
+
+        addIncognitoPreference(screen, extension.pkgName)
 
         val multiSource = extension.sources.size > 1
         val isMultiLangSingleSource =
@@ -252,6 +256,57 @@ class ExtensionDetailsController(
             url + "/src/" + pkgName.replace(".", "/") + path
         }
 
+    /**
+     * Adds a switch to pause reading history/tracking for every source in this extension,
+     * mirroring the global incognito toggle but scoped to just this package.
+     */
+    private fun addIncognitoPreference(
+        screen: PreferenceScreen,
+        pkgName: String,
+    ) {
+        val context = screen.context
+        screen.addThenConfigureSwitch {
+            key = "${pkgName}_incognito"
+            title = context.getString(R.string.incognito_mode)
+            summary = context.getString(R.string.pref_incognito_mode_extension_summary)
+            isIconSpaceReserved = true
+            iconRes = R.drawable.ic_incognito_circle_24dp
+            iconTint = context.getResourceColor(R.attr.colorPrimary)
+            isPersistent = false
+            isChecked = pkgName in preferences.incognitoExtensions().get()
+
+            onChange { newValue ->
+                val enable = newValue as Boolean
+                if (enable) {
+                    preferences.incognitoExtensions() += pkgName
+                } else {
+                    preferences.incognitoExtensions() -= pkgName
+                }
+                true
+            }
+        }
+    }
+
+    /**
+     * Like [eu.kanade.tachiyomi.ui.setting.switchPreference], but adds the switch to the
+     * screen *before* configuring it, instead of after.
+     *
+     * This screen's [PreferenceManager] has a manager-level [androidx.preference.PreferenceDataStore]
+     * (see [onViewCreated]), and androidx's `Preference.dispatchSetInitialValue()` always reads
+     * through that store at attach time regardless of `isPersistent` - which otherwise stomps
+     * on an `isChecked` set before [PreferenceScreen.addPreference], causing the switch to
+     * flash its default state before flipping to the real one on every open. Adding first means
+     * that attach-time read happens while the key is still unset (a no-op), so the real value
+     * set afterward is never overwritten.
+     */
+    private inline fun PreferenceScreen.addThenConfigureSwitch(block: (@DSL SwitchPreferenceCompat).() -> Unit): SwitchPreferenceCompat =
+        SwitchPreferenceCompat(context)
+            .apply {
+                isIconSpaceReserved = false
+                isSingleLineTitle = false
+            }.also { addPreference(it) }
+            .apply(block)
+
     private fun addPreferencesForSource(
         screen: PreferenceScreen,
         source: Source,
@@ -308,7 +363,7 @@ class ExtensionDetailsController(
                     }.launchIn(viewScope)
             }
 
-            screen.switchPreference(block)
+            screen.addThenConfigureSwitch(block)
         }
         if (source is ConfigurableSource) {
             val newScreen = screen.preferenceManager.createPreferenceScreen(context)

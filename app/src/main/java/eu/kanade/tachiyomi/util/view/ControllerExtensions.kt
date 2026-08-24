@@ -36,7 +36,6 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsCompat.Type.ime
 import androidx.core.view.WindowInsetsCompat.Type.systemBars
 import androidx.core.view.doOnLayout
-import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePaddingRelative
@@ -80,7 +79,6 @@ import uy.kohesive.injekt.injectLazy
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.pow
-import kotlin.math.roundToInt
 import kotlin.random.Random
 
 fun Controller.setOnQueryTextChangeListener(
@@ -819,10 +817,6 @@ fun Controller.setAppBarBG(
         } else {
             activityBinding?.appBar?.backgroundColor = Color.TRANSPARENT
         }
-        if (activityBinding?.appBar?.isInvisible != true) {
-            activityBinding?.statusBar?.gradientBackgroundColor =
-                ContextCompat.getColor(context, R.color.status_bar)
-        }
     } else {
         val color =
             ColorUtils.blendARGB(
@@ -831,10 +825,6 @@ fun Controller.setAppBarBG(
                 value,
             )
         activityBinding?.appBar?.setBackgroundColor(color)
-        if (activityBinding?.appBar?.isInvisible != true) {
-            activityBinding?.statusBar?.gradientBackgroundColor =
-                ColorUtils.setAlphaComponent(color, (0.87f * 255).roundToInt())
-        }
         if ((this as? FloatingSearchInterface)?.showFloatingBar() == true) {
             val invColor =
                 ColorUtils.blendARGB(

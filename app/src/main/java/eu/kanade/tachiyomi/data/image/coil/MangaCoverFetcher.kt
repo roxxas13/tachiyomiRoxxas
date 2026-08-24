@@ -17,10 +17,6 @@ import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.SourceManager
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.manga.MangaCoverMetadata
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import okhttp3.CacheControl
 import okhttp3.Call
 import okhttp3.Request
@@ -49,8 +45,6 @@ class MangaCoverFetcher(
     // For non-custom cover
     private val diskCacheKey: String? by lazy { MangaCoverKeyer().key(manga, options) }
     private lateinit var url: String
-
-    val fileScope = CoroutineScope(Job() + Dispatchers.IO)
 
     override suspend fun fetch(): FetchResult {
         // diskCacheKey is thumbnail_url
@@ -92,8 +86,9 @@ class MangaCoverFetcher(
             if (snapshot != null) {
                 val snapshotCoverCache = moveSnapshotToCoverCache(snapshot, coverFile)
                 if (snapshotCoverCache != null) {
-                    // Read from cover cache after added to library
-                    setRatioAndColorsInScope(manga, snapshotCoverCache)
+                    // Read from cover cache after added to library, the file is new so whatever
+                    // ratio/colors are stored for this manga are for its previous cover
+                    setRatioAndColorsInScope(manga, snapshotCoverCache, force = true)
                     return fileLoader(snapshotCoverCache)
                 }
 
@@ -112,7 +107,7 @@ class MangaCoverFetcher(
             try {
                 // Read from cover cache after library manga cover updated
                 val responseCoverCache = writeResponseToCoverCache(response, coverFile)
-                setRatioAndColorsInScope(manga)
+                setRatioAndColorsInScope(manga, force = responseCoverCache != null)
                 if (responseCoverCache != null) {
                     return fileLoader(responseCoverCache)
                 }
@@ -274,9 +269,7 @@ class MangaCoverFetcher(
         ogFile: File? = null,
         force: Boolean = false,
     ) {
-        fileScope.launch {
-            MangaCoverMetadata.setRatioAndColors(manga, ogFile, force)
-        }
+        MangaCoverMetadata.setRatioAndColorsAsync(manga, ogFile, force)
     }
 
     /** Modified from [MimeTypeMap.getFileExtensionFromUrl] to be more permissive with special characters. */

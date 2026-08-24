@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.source
 
 import android.graphics.drawable.Drawable
+import eu.kanade.tachiyomi.data.preference.PreferencesHelper
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -96,7 +97,7 @@ interface Source {
         val allExt = httpSource.getExtension(extManager)?.lang == "all"
         val onlyAll = httpSource.extOnlyHasAllLanguage(extManager)
         val isMultiLingual = enabledLanguages.filterNot { it == "all" }.size > 1
-        return (isMultiLingual && allExt) || (lang == "all" && !onlyAll)
+        return (isMultiLingual && allExt) || (lang == "all" && !onlyAll) || lang !in enabledLanguages
     }
 
     fun nameBasedOnEnabledLanguages(
@@ -128,3 +129,19 @@ fun Source.icon(): Drawable? = Injekt.get<ExtensionManager>().getAppIconForSourc
 fun Source.pkgName() = Injekt.get<ExtensionManager>().getPackageName(id)
 
 fun Source.preferenceKey(): String = "source_$id"
+
+fun Source.isIncognitoMode(): Boolean = isIncognitoModeForSource(id)
+
+/**
+ * Whether [sourceId] should be treated as incognito, either because global incognito mode
+ * is on or because the extension providing it has per-extension incognito mode enabled.
+ */
+fun isIncognitoModeForSource(
+    sourceId: Long?,
+    preferences: PreferencesHelper = Injekt.get(),
+): Boolean {
+    if (preferences.incognitoMode().get()) return true
+    if (sourceId == null) return false
+    val pkgName = Injekt.get<ExtensionManager>().getPackageName(sourceId) ?: return false
+    return pkgName in preferences.incognitoExtensions().get()
+}

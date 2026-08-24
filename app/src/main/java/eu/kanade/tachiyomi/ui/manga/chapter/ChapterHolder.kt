@@ -52,7 +52,8 @@ class ChapterHolder(
         binding.downloadButton.downloadButton.isVisible = !manga.isLocal() && !isLocked
         localSource = manga.isLocal()
 
-        ChapterUtil.setTextViewForChapter(binding.chapterTitle, item, hideStatus = isLocked)
+        val accent = adapter.delegate.themeColors().accent
+        ChapterUtil.setTextViewForChapter(binding.chapterTitle, item, hideStatus = isLocked, accent = accent)
 
         val statuses = mutableListOf<String>()
 
@@ -95,6 +96,7 @@ class ChapterHolder(
             item,
             showBookmark = false,
             hideStatus = isLocked,
+            accent = accent,
         )
         binding.chapterScanlator.text = statuses.joinToString(" • ")
 

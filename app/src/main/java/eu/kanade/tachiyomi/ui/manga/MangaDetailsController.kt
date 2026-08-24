@@ -43,6 +43,7 @@ import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import coil.imageLoader
+import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.bluelinelabs.conductor.ControllerChangeHandler
 import com.bluelinelabs.conductor.ControllerChangeType
@@ -231,6 +232,8 @@ class MangaDetailsController :
     private var floatingActionMode: android.view.ActionMode? = null
 
     override fun getTitle(): String? = manga?.title
+
+    override fun getIncognitoSourceId(): Long? = manga?.source
 
     override fun createBinding(inflater: LayoutInflater) = MangaDetailsControllerBinding.inflate(inflater)
 
@@ -581,9 +584,10 @@ class MangaDetailsController :
         }
         val scrollingColor = headerColor ?: activity.getResourceColor(R.attr.colorSurfaceContainer)
         val topColor = ColorUtils.setAlphaComponent(scrollingColor, 0)
-        val scrollingStatusColor =
-            ColorUtils.setAlphaComponent(scrollingColor, (0.87f * 255).roundToInt())
+        val statusColor = themeColors.background ?: activity.getResourceColor(R.attr.background)
         colorAnimator?.cancel()
+        activityBinding?.statusBar?.gradientBackgroundColor =
+            if (toolbarIsColored) statusColor else Color.TRANSPARENT
         if (animate) {
             val cA =
                 ValueAnimator.ofFloat(
@@ -600,22 +604,10 @@ class MangaDetailsController :
                         animator.animatedValue as Float,
                     ),
                 )
-                activityBinding?.statusBar?.gradientBackgroundColor =
-                    if (toolbarIsColored) {
-                        ColorUtils.blendARGB(
-                            topColor,
-                            scrollingStatusColor,
-                            animator.animatedValue as Float,
-                        )
-                    } else {
-                        Color.TRANSPARENT
-                    }
             }
             cA.start()
         } else {
             activityBinding?.appBar?.setBackgroundColor(if (toolbarIsColored) scrollingColor else topColor)
-            activityBinding?.statusBar?.gradientBackgroundColor =
-                if (toolbarIsColored) scrollingStatusColor else topColor
         }
     }
 
@@ -628,6 +620,8 @@ class MangaDetailsController :
                 .Builder(view.context)
                 .data(presenter.manga)
                 .allowHardware(false)
+                // Decoded at full size for the palette, keep it out of the entry the grid reads
+                .memoryCachePolicy(CachePolicy.READ_ONLY)
                 .memoryCacheKey(presenter.manga.key())
                 .target(
                     onSuccess = { drawable ->
@@ -669,10 +663,9 @@ class MangaDetailsController :
 
     private fun setStatusBarAndToolbar() {
         val scrollingColor = headerColor ?: activity!!.getResourceColor(R.attr.colorSurfaceContainer)
-        val scrollingStatusColor =
-            ColorUtils.setAlphaComponent(scrollingColor, (0.87f * 255).roundToInt())
+        val statusColor = themeColors.background ?: activity!!.getResourceColor(R.attr.background)
         activityBinding?.statusBar?.gradientBackgroundColor =
-            if (toolbarIsColored) scrollingStatusColor else Color.TRANSPARENT
+            if (toolbarIsColored) statusColor else Color.TRANSPARENT
         activityBinding?.appBar?.setBackgroundColor(
             if (toolbarIsColored) scrollingColor else Color.TRANSPARENT,
         )

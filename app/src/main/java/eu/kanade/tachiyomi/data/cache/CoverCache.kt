@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.database.DatabaseHelper
 import eu.kanade.tachiyomi.data.database.models.Manga
 import eu.kanade.tachiyomi.data.database.models.MangaImpl
+import eu.kanade.tachiyomi.data.image.coil.removeCoverFromMemory
 import eu.kanade.tachiyomi.util.storage.DiskUtil
 import eu.kanade.tachiyomi.util.system.executeOnIO
 import eu.kanade.tachiyomi.util.system.toast
@@ -169,7 +170,7 @@ class CoverCache(
     ) {
         getCustomCoverFile(manga).outputStream().use {
             inputStream.copyTo(it)
-            context.imageLoader.memoryCache?.remove(MemoryCache.Key(manga.key()))
+            context.imageLoader.removeCoverFromMemory(manga)
         }
     }
 
@@ -184,7 +185,7 @@ class CoverCache(
             getCustomCoverFile(manga).let {
                 it.exists() && it.delete()
             }
-        context.imageLoader.memoryCache?.remove(MemoryCache.Key(manga.key()))
+        context.imageLoader.removeCoverFromMemory(manga)
         return result
     }
 
@@ -227,7 +228,7 @@ class CoverCache(
         val file = getCoverFile(manga)
         if (deleteCustom) deleteCustomCover(manga)
         if (file.exists()) {
-            context.imageLoader.memoryCache?.remove(MemoryCache.Key(manga.key()))
+            context.imageLoader.removeCoverFromMemory(manga)
             file.delete()
         }
     }

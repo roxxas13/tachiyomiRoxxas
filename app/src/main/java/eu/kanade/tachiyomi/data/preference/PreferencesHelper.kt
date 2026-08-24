@@ -544,6 +544,9 @@ class PreferencesHelper(
 
     fun incognitoMode() = flowPrefs.getBoolean(Keys.incognitoMode, false)
 
+    /** Package names of extensions that have per-extension incognito mode enabled. */
+    fun incognitoExtensions() = flowPrefs.getStringSet(Keys.incognitoExtensions, mutableSetOf())
+
     fun hasPromptedBeforeUpdateAll() = flowPrefs.getBoolean("has_prompted_update_all", false)
 
     fun sideNavMode() = flowPrefs.getInt(Keys.sideNavMode, 0)
