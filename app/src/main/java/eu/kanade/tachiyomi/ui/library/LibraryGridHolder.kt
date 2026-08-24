@@ -6,7 +6,9 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.ImageView
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.core.view.marginBottom
 import androidx.core.view.updateLayoutParams
@@ -20,7 +22,6 @@ import eu.kanade.tachiyomi.databinding.MangaGridItemBinding
 import eu.kanade.tachiyomi.util.lang.highlightText
 import eu.kanade.tachiyomi.util.manga.MangaCoverMetadata
 import eu.kanade.tachiyomi.util.system.dpToPx
-import eu.kanade.tachiyomi.util.system.getResourceColor
 import eu.kanade.tachiyomi.util.view.backgroundColor
 import eu.kanade.tachiyomi.util.view.setCards
 import eu.kanade.tachiyomi.widget.AutofitRecyclerView
@@ -36,12 +37,81 @@ import eu.kanade.tachiyomi.widget.AutofitRecyclerView
 class LibraryGridHolder(
     private val view: View,
     adapter: LibraryCategoryAdapter,
-    compact: Boolean,
+    private val libraryLayout: Int,
     val fixedSize: Boolean,
+    isStaggered: Boolean,
 ) : LibraryHolder(view, adapter) {
     private val binding = MangaGridItemBinding.bind(view)
 
+    private val compact = libraryLayout == LibraryItem.LAYOUT_COMPACT_GRID
+    private val coverOnly = libraryLayout == LibraryItem.LAYOUT_COVER_ONLY_GRID
+
+    /** Only the comfortable grid shows the title/subtitle below the cover. */
+    private val showsTextLayout = libraryLayout == LibraryItem.LAYOUT_COMFORTABLE_GRID
+
+    private var lastOutline: Boolean? = null
+    private var hasCoverSize = false
+    private var lastCoverRatio: Float? = null
+    private var lastCoverWidth = 0
+
+    private var authorArtist = ""
+    private var filter = ""
+    private var transitionMangaId: Long? = null
+
+    /**
+     * The title has to be laid out before its line count is known, so the subtitle can only be
+     * settled afterwards. Reusing one runnable (instead of posting a new lambda per bind) keeps a
+     * pending pass from applying values of the item this holder used to show.
+     */
+    private val updateSubtitle =
+        Runnable {
+            val hasAuthorInFilter = filter.isNotBlank() && authorArtist.contains(filter, true)
+            val showSubtitle =
+                (binding.title.lineCount <= 1 || hasAuthorInFilter) && authorArtist.isNotBlank()
+            if (binding.subtitle.isVisible != showSubtitle) {
+                binding.subtitle.isVisible = showSubtitle
+            }
+            val maxLines = if (hasAuthorInFilter) 1 else 2
+            if (binding.title.maxLines != maxLines) {
+                binding.title.maxLines = maxLines
+            }
+        }
+
     init {
+        binding.unreadDownloadBadge.badgeView.libraryColors = adapter.colors
+        binding.behindTitle.isVisible = coverOnly
+        if (libraryLayout >= LibraryItem.LAYOUT_COMFORTABLE_GRID) {
+            binding.textLayout.isVisible = showsTextLayout
+            binding.card.setCardForegroundColor(
+                ContextCompat.getColorStateList(
+                    view.context,
+                    R.color.library_comfortable_grid_foreground,
+                ),
+            )
+        }
+        if (fixedSize) {
+            binding.constraintLayout.layoutParams =
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                )
+            binding.coverThumbnail.maxHeight = Int.MAX_VALUE
+            binding.coverThumbnail.minimumHeight = 0
+            binding.constraintLayout.minHeight = 0
+            binding.coverThumbnail.scaleType = ImageView.ScaleType.CENTER_CROP
+            binding.coverThumbnail.adjustViewBounds = false
+            binding.coverThumbnail.updateLayoutParams<ConstraintLayout.LayoutParams> {
+                height = ConstraintLayout.LayoutParams.MATCH_CONSTRAINT
+                dimensionRatio = "15:22"
+            }
+        }
+        if (!showsTextLayout) {
+            binding.card.updateLayoutParams<ConstraintLayout.LayoutParams> {
+                bottomMargin = (if (isStaggered) 2 else 6).dpToPx
+            }
+        }
+        binding.setBGAndFG(libraryLayout)
+
         binding.playLayout.setOnClickListener { playButtonClicked() }
         binding.playLayout.setOnLongClickListener { itemView.performLongClick() }
         if (compact) {
@@ -64,53 +134,73 @@ class LibraryGridHolder(
      * @param item the manga item to bind.
      */
     override fun onSetValues(item: LibraryItem) {
-        // Update the title and subtitle of the manga.
-        setCards(adapter.showOutline, binding.card, binding.unreadDownloadBadge.root)
-        binding.playButton.transitionName = "library chapter $bindingAdapterPosition transition"
+        applyOutline()
+        // Only the view that started a transition keeps a name, dropped once it shows another manga
+        if (transitionMangaId != null && transitionMangaId != item.manga.id) {
+            binding.playButton.transitionName = null
+            transitionMangaId = null
+        }
         binding.constraintLayout.isVisible = !item.manga.isBlank()
-        binding.title.text = item.manga.title.highlightText(item.filter, color)
-        binding.behindTitle.text = item.manga.title
+        filter = item.filter
+
+        // Each layout shows the title in a different view, no need to fill in the hidden ones
+        when {
+            compact -> binding.compactTitle.text = item.manga.title.highlightText(filter, color)
+            coverOnly -> binding.behindTitle.text = item.manga.title
+            else -> binding.title.text = item.manga.title.highlightText(filter, color)
+        }
+
         val mangaColor = item.manga.dominantCoverColors
-        binding.coverConstraint.backgroundColor = mangaColor?.first ?: itemView.context.getResourceColor(R.attr.background)
-        binding.behindTitle.setTextColor(
-            mangaColor?.second ?: itemView.context.getResourceColor(R.attr.colorOnBackground),
-        )
-        val authorArtist =
-            if (item.manga.author == item.manga.artist || item.manga.artist.isNullOrBlank()) {
-                item.manga.author?.trim() ?: ""
-            } else {
-                listOfNotNull(
-                    item.manga.author
-                        ?.trim()
-                        ?.takeIf { it.isNotBlank() },
-                    item.manga.artist
-                        ?.trim()
-                        ?.takeIf { it.isNotBlank() },
-                ).joinToString(", ")
+        val coverBackground = mangaColor?.first ?: adapter.colors.background
+        if (binding.coverConstraint.backgroundColor != coverBackground) {
+            binding.coverConstraint.backgroundColor = coverBackground
+        }
+        if (coverOnly) {
+            binding.behindTitle.setTextColor(mangaColor?.second ?: adapter.colors.onBackground)
+        }
+
+        if (showsTextLayout) {
+            authorArtist =
+                if (item.manga.author == item.manga.artist || item.manga.artist.isNullOrBlank()) {
+                    item.manga.author?.trim() ?: ""
+                } else {
+                    listOfNotNull(
+                        item.manga.author
+                            ?.trim()
+                            ?.takeIf { it.isNotBlank() },
+                        item.manga.artist
+                            ?.trim()
+                            ?.takeIf { it.isNotBlank() },
+                    ).joinToString(", ")
+                }
+            binding.subtitle.text = authorArtist.highlightText(filter, color)
+
+            // Measure the title with the room it normally gets, a previous bind may have capped it
+            if (binding.title.maxLines != 2) {
+                binding.title.maxLines = 2
             }
-        binding.subtitle.text = authorArtist.highlightText(item.filter, color)
-
-        binding.compactTitle.text =
-            binding.title.text
-                ?.toString()
-                ?.highlightText(item.filter, color)
-
-        binding.title.post {
-            val hasAuthorInFilter =
-                item.filter.isNotBlank() && authorArtist.contains(item.filter, true)
-            binding.subtitle.isVisible =
-                (binding.title.lineCount <= 1 || hasAuthorInFilter) &&
-                authorArtist.isNotBlank()
-            binding.title.maxLines = if (hasAuthorInFilter) 1 else 2
+            binding.title.removeCallbacks(updateSubtitle)
+            binding.title.post(updateSubtitle)
         }
 
         setUnreadBadge(binding.unreadDownloadBadge.badgeView, item)
         setReadingButton(item)
-        setSelected(adapter.isSelected(flexibleAdapterPosition))
 
         // Update the cover.
         binding.coverThumbnail.dispose()
+//        binding.coverThumbnail.setImageDrawable(null)
         setCover(item.manga)
+    }
+
+    private fun applyOutline() {
+        val showOutline = adapter.showOutline
+        if (lastOutline == showOutline) return
+        lastOutline = showOutline
+        setCards(showOutline, binding.card, binding.unreadDownloadBadge.root)
+    }
+
+    private fun setReadingButton(item: LibraryItem) {
+        binding.playLayout.isVisible = item.manga.unread > 0 && !LibraryItem.hideReadingButton
     }
 
     override fun toggleActivation() {
@@ -120,15 +210,19 @@ class LibraryGridHolder(
 
     fun setSelected(isSelected: Boolean) {
         with(binding) {
-            card.strokeWidth =
+            val strokeWidth =
                 when {
                     isSelected -> 3.dpToPx
                     adapter.showOutline -> 1.dpToPx
                     else -> 0
                 }
-            arrayOf(card, unreadDownloadBadge.root, title, subtitle).forEach {
-                it.isSelected = isSelected
+            if (card.strokeWidth != strokeWidth) {
+                card.strokeWidth = strokeWidth
             }
+            card.isSelected = isSelected
+            unreadDownloadBadge.root.isSelected = isSelected
+            title.isSelected = isSelected
+            subtitle.isSelected = isSelected
         }
     }
 
@@ -154,10 +248,20 @@ class LibraryGridHolder(
         manga: Manga,
         parent: AutofitRecyclerView? = null,
     ) {
+        // Every one of these sizes triggers a layout pass, skip when the view already has them
+        val ratio = MangaCoverMetadata.getRatio(manga)
+        val itemWidth = parent?.itemWidth ?: binding.root.width
+        if (hasCoverSize && ratio == lastCoverRatio && itemWidth == lastCoverWidth) return
+        hasCoverSize = true
+        lastCoverRatio = ratio
+        lastCoverWidth = itemWidth
         binding.setFreeformCoverRatio(manga, parent)
     }
 
     private fun playButtonClicked() {
+        val manga = (adapter.getItem(flexibleAdapterPosition) as? LibraryItem)?.manga
+        transitionMangaId = manga?.id
+        binding.playButton.transitionName = "library chapter ${manga?.id ?: bindingAdapterPosition} transition"
         adapter.libraryListener?.startReading(flexibleAdapterPosition, binding.playButton)
     }
 

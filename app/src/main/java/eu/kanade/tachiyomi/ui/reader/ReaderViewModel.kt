@@ -25,6 +25,7 @@ import eu.kanade.tachiyomi.data.track.TrackService
 import eu.kanade.tachiyomi.source.LocalSource
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceManager
+import eu.kanade.tachiyomi.source.isIncognitoModeForSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.ui.manga.chapter.ChapterItem
@@ -499,7 +500,7 @@ class ReaderViewModel(
         selectedChapter.chapter.last_page_read = page.index
         selectedChapter.chapter.pages_left =
             (selectedChapter.pages?.size ?: page.index) - page.index
-        val shouldTrack = !preferences.incognitoMode().get() || hasTrackers
+        val shouldTrack = !isIncognitoModeForSource(manga?.source, preferences) || hasTrackers
         if (shouldTrack &&
             // For double pages, check if the second to last page is doubled up
             (
@@ -617,7 +618,7 @@ class ReaderViewModel(
      */
     private fun markDuplicateChaptersAsRead(readerChapter: ReaderChapter) {
         val manga = manga ?: return
-        if (preferences.incognitoMode().get()) return
+        if (isIncognitoModeForSource(manga.source, preferences)) return
         val markDuplicateAsRead =
             preferences.markDuplicateReadChapterAsRead().get().contains(MARK_DUPLICATE_CHAPTER_READ_EXISTING)
         if (!markDuplicateAsRead || !readerChapter.chapter.isRecognizedNumber) return
@@ -657,7 +658,7 @@ class ReaderViewModel(
         db.getChapter(readerChapter.chapter.id!!).executeAsBlocking()?.let { dbChapter ->
             readerChapter.chapter.bookmark = dbChapter.bookmark
         }
-        if (!preferences.incognitoMode().get() || hasTrackers) {
+        if (!isIncognitoModeForSource(manga?.source, preferences) || hasTrackers) {
             db.updateChapterProgress(readerChapter.chapter).executeAsBlocking()
         }
     }
@@ -666,7 +667,7 @@ class ReaderViewModel(
      * Saves this [readerChapter] last read history.
      */
     private fun saveChapterHistory(readerChapter: ReaderChapter) {
-        if (!preferences.incognitoMode().get()) {
+        if (!isIncognitoModeForSource(manga?.source)) {
             val readAt = Date().time
             val sessionReadDuration = chapterReadStartTime?.let { readAt - it } ?: 0
             val oldTimeRead = db.getHistoryByChapterUrl(readerChapter.chapter.url).executeAsBlocking()?.time_read ?: 0

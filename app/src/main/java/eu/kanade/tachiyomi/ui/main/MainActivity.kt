@@ -11,6 +11,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Rect
 import android.os.Build
@@ -26,6 +27,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import androidx.activity.BackEventCompat
@@ -91,6 +93,7 @@ import eu.kanade.tachiyomi.data.updater.RELEASE_URL
 import eu.kanade.tachiyomi.databinding.MainActivityBinding
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.extension.api.ExtensionApi
+import eu.kanade.tachiyomi.source.isIncognitoModeForSource
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.ui.base.MaterialMenuSheet
 import eu.kanade.tachiyomi.ui.base.SmallToolbarInterface
@@ -408,11 +411,14 @@ open class MainActivity : BaseActivity<MainActivityBinding>() {
         binding.toolbar.overflowIcon?.setTint(getResourceColor(R.attr.actionBarTintColor))
         if (isTablet()) {
             binding.sideNav?.let { sideNav ->
-                if (preferences.sideNavExpanded().get()) {
+                val isPortrait = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+                if (preferences.sideNavExpanded().get() || isPortrait) {
                     sideNav.expand()
                 }
-                if (sideNav.headerView == null) {
+                if (sideNav.headerView == null && !isPortrait) {
                     sideNav.addHeaderView(R.layout.side_nav_header)
+                } else if (isPortrait) {
+                    binding.sideNav?.removeHeaderView()
                 }
                 sideNav.headerView?.isVisible = true
                 // The rail centers its header, line it up with the icons of the items instead
@@ -479,6 +485,7 @@ open class MainActivity : BaseActivity<MainActivityBinding>() {
         supportActionBar?.setDisplayShowCustomEnabled(true)
 
         setNavBarColor(content.rootWindowInsetsCompat)
+        binding.statusBar.gradientBackgroundColor = getColor(R.color.status_bar)
         binding.appBar.mainActivity = this
         nav.isVisible = false
         content.doOnApplyWindowInsetsCompat { v, insets, _ ->
@@ -499,6 +506,9 @@ open class MainActivity : BaseActivity<MainActivityBinding>() {
                 top = systemInsets.top,
             )
             binding.statusBar.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                height = systemInsets.top
+            }
+            binding.actionModeStatusBar.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                 height = systemInsets.top
             }
             binding.navBar.updateLayoutParams<ViewGroup.MarginLayoutParams> {
@@ -712,6 +722,7 @@ open class MainActivity : BaseActivity<MainActivityBinding>() {
                 ) {
                     to?.view?.alpha = 1f
                     syncActivityViewWithController(to, from, isPush)
+                    updateIncognitoBadge()
                     binding.appBar.isVisible = true
                     binding.appBar.alpha = 1f
                     if (binding.backShadow.isVisible && !isPush) {
@@ -797,9 +808,7 @@ open class MainActivity : BaseActivity<MainActivityBinding>() {
         preferences
             .incognitoMode()
             .asImmediateFlowIn(lifecycleScope) {
-                binding.toolbar.setIncognitoMode(it)
-                binding.searchToolbar.setIncognitoMode(it)
-                SecureActivityDelegate.setSecure(this)
+                updateIncognitoBadge()
             }
         preferences
             .sideNavIconAlignment()
@@ -816,8 +825,10 @@ open class MainActivity : BaseActivity<MainActivityBinding>() {
             .asImmediateFlowIn(lifecycleScope) { expanded ->
                 if (!isTablet()) return@asImmediateFlowIn
                 val sideNav = binding.sideNav ?: return@asImmediateFlowIn
+                val isPortrait = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
                 // Whichever recents entry is about to go away may be the checked one, so hand the
                 // selection over before the rail animates rather than during
+                val expanded = expanded || isPortrait
                 syncRecentsNavSelection(expanded)
                 if (sideNav.isExpanded != expanded) {
                     if (expanded) sideNav.expand() else sideNav.collapse()
@@ -1049,13 +1060,30 @@ open class MainActivity : BaseActivity<MainActivityBinding>() {
     }
 
     override fun startSupportActionMode(callback: ActionMode.Callback): ActionMode? {
-        binding.statusBar.gradientBackgroundColor = getResourceColor(R.attr.colorSurfaceContainer)
+        binding.actionModeStatusBar.backgroundColor = getResourceColor(R.attr.colorSurfaceContainer)
+        binding.actionModeStatusBar.animate().cancel()
+        binding.actionModeStatusBar.alpha = 0f
+        binding.actionModeStatusBar.isVisible = true
+        binding.actionModeStatusBar
+            .animate()
+            .alpha(1f)
+            .setDuration(ACTION_MODE_FADE_DURATION)
+            .setInterpolator(AccelerateDecelerateInterpolator())
+            .start()
         actionMode = super.startSupportActionMode(callback)
         reEnableBackPressedCallBack()
         return actionMode
     }
 
     override fun onSupportActionModeFinished(mode: ActionMode) {
+        binding.actionModeStatusBar.animate().cancel()
+        binding.actionModeStatusBar
+            .animate()
+            .alpha(0f)
+            .setDuration(ACTION_MODE_FADE_DURATION)
+            .setInterpolator(AccelerateDecelerateInterpolator())
+            .withEndAction { binding.actionModeStatusBar.isVisible = false }
+            .start()
         actionMode = null
         reEnableBackPressedCallBack()
         super.onSupportActionModeFinished(mode)
@@ -1646,6 +1674,19 @@ open class MainActivity : BaseActivity<MainActivityBinding>() {
         setFloatingToolbar(canShowFloatingToolbar(controller), changeBG = false)
     }
 
+    /**
+     * Updates the toolbar incognito badge, taking into account both the global incognito
+     * toggle and any per-extension incognito state for the source currently on screen.
+     */
+    private fun updateIncognitoBadge() {
+        if (!isBindingInitialized || !this::router.isInitialized) return
+        val sourceId = (router.backstack.lastOrNull()?.controller as? BaseController<*>)?.getIncognitoSourceId()
+        val incognito = isIncognitoModeForSource(sourceId, preferences)
+        binding.toolbar.setIncognitoMode(incognito)
+        binding.searchToolbar.setIncognitoMode(incognito)
+        SecureActivityDelegate.setSecure(this, sourceId)
+    }
+
     protected open fun syncActivityViewWithController(
         to: Controller?,
         from: Controller? = null,
@@ -1854,6 +1895,9 @@ open class MainActivity : BaseActivity<MainActivityBinding>() {
     companion object {
         private const val SWIPE_THRESHOLD = 100
         private const val SWIPE_VELOCITY_THRESHOLD = 100
+
+        // Matches AppCompat's unset ViewPropertyAnimator default (ValueAnimator.DURATION) used to fade mActionModeView
+        private const val ACTION_MODE_FADE_DURATION = 300L
 
         const val MAIN_ACTIVITY = "eu.kanade.tachiyomi.ui.main.MainActivity"
 

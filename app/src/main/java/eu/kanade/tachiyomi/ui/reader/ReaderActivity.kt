@@ -388,6 +388,10 @@ class ReaderActivity : BaseActivity<ReaderActivityBinding>() {
                         withUIContext {
                             setInitialChapterError(exception)
                         }
+                    } else {
+                        withUIContext {
+                            SecureActivityDelegate.setSecure(this@ReaderActivity, viewModel.manga?.source)
+                        }
                     }
                 }
             } else {
@@ -421,7 +425,7 @@ class ReaderActivity : BaseActivity<ReaderActivityBinding>() {
         preferences
             .incognitoMode()
             .asImmediateFlowIn(lifecycleScope) {
-                SecureActivityDelegate.setSecure(this)
+                SecureActivityDelegate.setSecure(this, viewModel.manga?.source)
             }
         reEnableBackPressedCallBack()
 

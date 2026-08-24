@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.util.system.contextCompatColor
 import eu.kanade.tachiyomi.util.system.dpToPx
 import eu.kanade.tachiyomi.util.system.dpToPxEnd
 import eu.kanade.tachiyomi.util.system.getResourceColor
+import eu.kanade.tachiyomi.util.system.hueShiftedTo
 import eu.kanade.tachiyomi.util.system.isHighTextContrastEnabled
 import eu.kanade.tachiyomi.util.system.timeSpanFromNow
 import java.text.DecimalFormat
@@ -39,9 +40,10 @@ class ChapterUtil {
             chapter: Chapter,
             showBookmark: Boolean = true,
             hideStatus: Boolean = false,
+            accent: Int? = null,
         ) {
             val context = textView.context
-            textView.setTextColor(chapterColor(context, chapter, hideStatus))
+            textView.setTextColor(chapterColor(context, chapter, hideStatus).hueShiftedTo(accent))
             val showReadIndicator = !hideStatus && chapter.read && context.isHighTextContrastEnabled()
             textView.paintFlags =
                 if (showReadIndicator) {

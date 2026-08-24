@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.ui.manga
 
 import android.app.Dialog
 import android.content.Context
-import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.Bundle
 import android.view.ActionMode
@@ -13,7 +12,6 @@ import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
-import androidx.core.graphics.ColorUtils
 import androidx.core.view.children
 import androidx.core.view.isVisible
 import coil.load
@@ -38,9 +36,10 @@ import eu.kanade.tachiyomi.util.system.LocaleHelper
 import eu.kanade.tachiyomi.util.system.clipboardHasImage
 import eu.kanade.tachiyomi.util.system.dpToPx
 import eu.kanade.tachiyomi.util.system.getClipboardImageUri
-import eu.kanade.tachiyomi.util.system.getResourceColor
 import eu.kanade.tachiyomi.util.system.isInNightMode
 import eu.kanade.tachiyomi.util.system.materialAlertDialog
+import eu.kanade.tachiyomi.util.view.applyTagColors
+import eu.kanade.tachiyomi.util.view.tagChipColors
 import eu.kanade.tachiyomi.widget.TachiyomiTextInputEditText
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -55,6 +54,7 @@ class EditMangaDialog : DialogController {
 
     lateinit var binding: EditMangaDialogBinding
     private val languages = mutableListOf<String>()
+    private val originalGenres by lazy { manga.getOriginalGenres().orEmpty() }
 
     private val infoController
         get() = targetController as MangaDetailsController
@@ -295,38 +295,8 @@ class EditMangaDialog : DialogController {
                 infoController.presenter.preferences
                     .themeDarkAmoled()
                     .get()
-            val baseTagColor = context.getResourceColor(R.attr.background)
-            val bgArray = FloatArray(3)
-            val accentArray = FloatArray(3)
-
-            ColorUtils.colorToHSL(baseTagColor, bgArray)
-            ColorUtils.colorToHSL(context.getResourceColor(R.attr.colorPrimary), accentArray)
-            val downloadedColor =
-                ColorUtils.setAlphaComponent(
-                    ColorUtils.HSLToColor(
-                        floatArrayOf(
-                            bgArray[0],
-                            bgArray[1],
-                            (
-                                when {
-                                    amoled && dark -> 0.1f
-                                    dark -> 0.225f
-                                    else -> 0.85f
-                                }
-                            ),
-                        ),
-                    ),
-                    199,
-                )
-            val textColor =
-                ColorUtils.HSLToColor(
-                    floatArrayOf(
-                        accentArray[0],
-                        accentArray[1],
-                        if (dark) 0.945f else 0.175f,
-                    ),
-                )
-            genres.map { genreText ->
+            val tagColors = tagChipColors(dark, amoled)
+            genres.forEach { genreText ->
                 val chip =
                     LayoutInflater.from(binding.root.context).inflate(
                         R.layout.genre_chip,
@@ -335,8 +305,8 @@ class EditMangaDialog : DialogController {
                     ) as Chip
                 val id = View.generateViewId()
                 chip.id = id
-                chip.chipBackgroundColor = ColorStateList.valueOf(downloadedColor)
-                chip.setTextColor(textColor)
+                val isCustom = originalGenres.none { it.equals(genreText, ignoreCase = true) }
+                chip.applyTagColors(tagColors, isCustom)
                 chip.text = genreText
                 chip.isCloseIconVisible = true
                 chip.setOnCloseIconClickListener { view ->

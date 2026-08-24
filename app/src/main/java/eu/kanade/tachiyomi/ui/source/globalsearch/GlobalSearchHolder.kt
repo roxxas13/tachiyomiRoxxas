@@ -32,8 +32,7 @@ class GlobalSearchHolder(
 
     init {
         // Set layout horizontal.
-        binding.recycler.layoutManager =
-            CarouselLayoutManager()
+        binding.recycler.layoutManager = CarouselLayoutManager()
         binding.recycler.adapter = mangaAdapter
         binding.titleMoreIcon.isVisible = adapter.controller !is SearchController && adapter.controller.extensionFilter == null
         if (binding.titleMoreIcon.isVisible) {
