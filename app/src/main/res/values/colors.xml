@@ -41,6 +41,9 @@
     <color name="rippleColorTachiyomi">#1F2979FF</color>
     <color name="secondaryTachiyomi">#0d2f68</color>
     <color name="actionModeShadow">@color/md_black_1000_38</color>
+    <!-- overrides AppCompat's private status guard scrim, which is otherwise opaque black -->
+    <color name="abc_decor_view_status_guard">@android:color/transparent</color>
+    <color name="abc_decor_view_status_guard_light">@android:color/transparent</color>
     <color name="gray_button">#404040</color>
     <color name="legacyRippleColor">@color/md_black_1000_12</color>
 

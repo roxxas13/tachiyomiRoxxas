@@ -5,7 +5,6 @@ import android.net.Uri
 import android.os.Environment
 import coil.Coil
 import coil.imageLoader
-import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.request.SuccessResult
@@ -20,6 +19,7 @@ import eu.kanade.tachiyomi.data.database.models.Track
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.data.download.model.DownloadQueue
+import eu.kanade.tachiyomi.data.image.coil.removeCoverFromMemory
 import eu.kanade.tachiyomi.data.library.CustomMangaManager
 import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
@@ -403,8 +403,7 @@ class MangaDetailsPresenter(
                             .build()
 
                     if (Coil.imageLoader(preferences.context).execute(request) is SuccessResult) {
-                        preferences.context.imageLoader.memoryCache
-                            ?.remove(MemoryCache.Key(manga.key()))
+                        preferences.context.imageLoader.removeCoverFromMemory(manga)
                         withContext(Dispatchers.Main) {
                             view?.setPaletteColor()
                         }

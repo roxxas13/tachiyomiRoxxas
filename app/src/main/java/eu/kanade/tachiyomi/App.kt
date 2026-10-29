@@ -38,6 +38,7 @@ import eu.kanade.tachiyomi.util.system.WebViewUtil
 import eu.kanade.tachiyomi.util.system.launchIO
 import eu.kanade.tachiyomi.util.system.localeContext
 import eu.kanade.tachiyomi.util.system.notification
+import eu.kanade.tachiyomi.util.system.registerCurrentActivityTracker
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import org.conscrypt.Conscrypt
@@ -83,6 +84,8 @@ open class App :
         }
 
         GlobalExceptionHandler.initialize(applicationContext, CrashActivity::class.java)
+
+        registerCurrentActivityTracker()
 
         CoilSetup(this)
 

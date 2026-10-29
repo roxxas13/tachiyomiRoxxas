@@ -36,6 +36,9 @@ class LibraryCategoryAdapter(
 
     var showOutline = preferences.outlineOnCovers().get()
 
+    /** Shared by every holder, rather than each of them resolving the same attrs. */
+    val colors by lazy { LibraryColors(recyclerView.context) }
+
     private var lastCategory = ""
 
     val hasActiveFilters: Boolean

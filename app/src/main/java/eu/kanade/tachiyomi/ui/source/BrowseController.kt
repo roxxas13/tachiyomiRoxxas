@@ -33,6 +33,7 @@ import eu.kanade.tachiyomi.extension.util.ExtensionInstaller
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.LocalSource
 import eu.kanade.tachiyomi.source.Source
+import eu.kanade.tachiyomi.source.isIncognitoModeForSource
 import eu.kanade.tachiyomi.ui.base.controller.BaseController
 import eu.kanade.tachiyomi.ui.extension.ExtensionFilterController
 import eu.kanade.tachiyomi.ui.main.BottomSheetController
@@ -709,7 +710,7 @@ class BrowseController :
         source: CatalogueSource,
         controller: BrowseSourceController,
     ) {
-        if (!preferences.incognitoMode().get()) {
+        if (!isIncognitoModeForSource(source.id, preferences)) {
             preferences.lastUsedCatalogueSource().set(source.id)
             if (source !is LocalSource) {
                 val list = preferences.lastUsedSources().get().toMutableSet()

@@ -28,6 +28,14 @@
             android:importantForAccessibility="no" />
     </com.bluelinelabs.conductor.ChangeHandlerFrameLayout>
 
+    <View
+        android:id="@+id/status_bar"
+        android:layout_width="0dp"
+        app:layout_constraintStart_toEndOf="@id/side_nav"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_height="0dp" />
+
     <eu.kanade.tachiyomi.ui.base.ExpandedAppBarLayout
         android:id="@+id/app_bar"
         android:layout_width="0dp"
@@ -253,13 +261,13 @@
         app:menu="@menu/side_navigation" />
 
     <View
-        android:id="@+id/status_bar"
+        android:id="@+id/action_mode_status_bar"
         android:layout_width="0dp"
+        android:visibility="gone"
         app:layout_constraintStart_toEndOf="@id/side_nav"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_height="0dp" />
-
 
     <View
         android:id="@+id/nav_bar"

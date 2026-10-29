@@ -145,6 +145,8 @@ open class BrowseSourceController(
 
     override fun getSearchTitle(): String? = if (presenter.sourceIsInitialized) searchTitle(presenter.source.name) else null
 
+    override fun getIncognitoSourceId(): Long? = if (presenter.sourceIsInitialized) presenter.source.id else args.getLong(SOURCE_ID_KEY)
+
     // disabling for now, one day maybe when source icons look good
 //    override fun getBigIcon(): Drawable? {
 //        return presenter.source.icon()

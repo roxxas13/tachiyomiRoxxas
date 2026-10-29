@@ -8,6 +8,7 @@ import android.view.WindowManager
 import androidx.biometric.BiometricManager
 import eu.kanade.tachiyomi.data.preference.PreferenceValues
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
+import eu.kanade.tachiyomi.source.isIncognitoModeForSource
 import eu.kanade.tachiyomi.ui.main.SearchActivity
 import eu.kanade.tachiyomi.util.system.AuthenticatorUtil
 import uy.kohesive.injekt.injectLazy
@@ -18,8 +19,11 @@ object SecureActivityDelegate {
 
     var locked: Boolean = true
 
-    fun setSecure(activity: Activity?) {
-        val incognitoMode = preferences.incognitoMode().get()
+    fun setSecure(
+        activity: Activity?,
+        sourceId: Long? = null,
+    ) {
+        val incognitoMode = isIncognitoModeForSource(sourceId)
         val enabled =
             when (preferences.secureScreen().get()) {
                 PreferenceValues.SecureScreenMode.ALWAYS -> true

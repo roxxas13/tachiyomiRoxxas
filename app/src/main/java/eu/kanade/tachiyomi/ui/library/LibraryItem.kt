@@ -2,13 +2,6 @@ package eu.kanade.tachiyomi.ui.library
 
 import android.content.Context
 import android.view.View
-import android.view.ViewGroup
-import android.widget.FrameLayout
-import android.widget.ImageView
-import androidx.constraintlayout.widget.ConstraintLayout
-import androidx.core.content.ContextCompat
-import androidx.core.view.isVisible
-import androidx.core.view.updateLayoutParams
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import eu.davidea.flexibleadapter.FlexibleAdapter
@@ -18,22 +11,17 @@ import eu.davidea.flexibleadapter.items.IFlexible
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.database.models.LibraryManga
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
-import eu.kanade.tachiyomi.databinding.MangaGridItemBinding
 import eu.kanade.tachiyomi.source.LocalSource
 import eu.kanade.tachiyomi.source.SourceManager
 import eu.kanade.tachiyomi.ui.library.search.QueryNode
 import eu.kanade.tachiyomi.ui.library.search.matches
-import eu.kanade.tachiyomi.util.system.dpToPx
 import eu.kanade.tachiyomi.widget.AutofitRecyclerView
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
 class LibraryItem(
     val manga: LibraryManga,
     header: LibraryHeaderItem,
     private val context: Context?,
-    private val preferences: PreferencesHelper = Injekt.get(),
 ) : AbstractSectionableItem<LibraryHolder, LibraryHeaderItem>(header),
     IFilterable<String> {
     var downloadCount = -1
@@ -41,20 +29,9 @@ class LibraryItem(
     var sourceLanguage: String? = null
     var filter = ""
 
-    private val sourceManager: SourceManager by injectLazy()
-
     val sourceName: String by lazy { sourceManager.getOrStub(manga.source).name }
 
     internal fun searchLanguage(): String = sourceLanguage ?: sourceManager.getOrStub(manga.source).lang
-
-    private val uniformSize: Boolean
-        get() = preferences.uniformGrid().get()
-
-    private val libraryLayout: Int
-        get() = preferences.libraryLayout().get()
-
-    val hideReadingButton: Boolean
-        get() = preferences.hideStartReadingButton().get()
 
     override fun getLayoutRes(): Int =
         if (libraryLayout == LAYOUT_LIST || manga.isBlank()) {
@@ -74,48 +51,13 @@ class LibraryItem(
             if (libraryLayout == LAYOUT_LIST || manga.isBlank()) {
                 LibraryListHolder(view, adapter as LibraryCategoryAdapter)
             } else {
-                view.apply {
-                    val isStaggered = parent.layoutManager is StaggeredGridLayoutManager
-                    val binding = MangaGridItemBinding.bind(this)
-                    binding.behindTitle.isVisible = libraryLayout == LAYOUT_COVER_ONLY_GRID
-                    if (libraryLayout >= LAYOUT_COMFORTABLE_GRID) {
-                        binding.textLayout.isVisible = libraryLayout == LAYOUT_COMFORTABLE_GRID
-                        binding.card.setCardForegroundColor(
-                            ContextCompat.getColorStateList(
-                                context,
-                                R.color.library_comfortable_grid_foreground,
-                            ),
-                        )
-                    }
-                    if (isFixedSize) {
-                        binding.constraintLayout.layoutParams =
-                            FrameLayout.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.WRAP_CONTENT,
-                            )
-                        binding.coverThumbnail.maxHeight = Int.MAX_VALUE
-                        binding.coverThumbnail.minimumHeight = 0
-                        binding.constraintLayout.minHeight = 0
-                        binding.coverThumbnail.scaleType = ImageView.ScaleType.CENTER_CROP
-                        binding.coverThumbnail.adjustViewBounds = false
-                        binding.coverThumbnail.updateLayoutParams<ConstraintLayout.LayoutParams> {
-                            height = ConstraintLayout.LayoutParams.MATCH_CONSTRAINT
-                            dimensionRatio = "15:22"
-                        }
-                    }
-                    if (libraryLayout != LAYOUT_COMFORTABLE_GRID) {
-                        binding.card.updateLayoutParams<ConstraintLayout.LayoutParams> {
-                            bottomMargin = (if (isStaggered) 2 else 6).dpToPx
-                        }
-                    }
-                    binding.setBGAndFG(libraryLayout)
-                }
                 val gridHolder =
                     LibraryGridHolder(
                         view,
                         adapter as LibraryCategoryAdapter,
-                        libraryLayout == LAYOUT_COMPACT_GRID,
+                        libraryLayout,
                         isFixedSize,
+                        parent.layoutManager is StaggeredGridLayoutManager,
                     )
                 if (!isFixedSize) {
                     gridHolder.setFreeformCoverRatio(manga, parent)
@@ -199,5 +141,25 @@ class LibraryItem(
         const val LAYOUT_COMPACT_GRID = 1
         const val LAYOUT_COMFORTABLE_GRID = 2
         const val LAYOUT_COVER_ONLY_GRID = 3
+
+        private val preferences: PreferencesHelper by injectLazy()
+        private val sourceManager: SourceManager by injectLazy()
+
+        /**
+         * Read on every view type lookup and bind, so they're kept as a snapshot rather than
+         * hitting shared prefs each time. [updateDisplayPrefs] refreshes them when they change.
+         */
+        var libraryLayout = preferences.libraryLayout().get()
+            private set
+        var uniformSize = preferences.uniformGrid().get()
+            private set
+        var hideReadingButton = preferences.hideStartReadingButton().get()
+            private set
+
+        fun updateDisplayPrefs() {
+            libraryLayout = preferences.libraryLayout().get()
+            uniformSize = preferences.uniformGrid().get()
+            hideReadingButton = preferences.hideStartReadingButton().get()
+        }
     }
 }

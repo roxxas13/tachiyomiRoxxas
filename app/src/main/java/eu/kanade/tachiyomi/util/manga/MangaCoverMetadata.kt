@@ -1,15 +1,21 @@
 package eu.kanade.tachiyomi.util.manga
 
 import android.graphics.BitmapFactory
+import android.os.Process
 import androidx.annotation.ColorInt
 import androidx.palette.graphics.Palette
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.database.models.Manga
 import eu.kanade.tachiyomi.data.image.coil.getBestColor
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.launch
 import uy.kohesive.injekt.injectLazy
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 
 /** Object that holds info about a covers size ratio + dominant colors */
 object MangaCoverMetadata {
@@ -17,6 +23,24 @@ object MangaCoverMetadata {
     private var coverColorMap = ConcurrentHashMap<Long, Pair<Int, Int>>()
     private val preferences by injectLazy<PreferencesHelper>()
     private val coverCache by injectLazy<CoverCache>()
+
+    /**
+     * Decoding a cover and running a palette over it is CPU work. The old per-fetcher scope ran it
+     * on Dispatchers.IO, which is normal thread priority - fine when nothing else is happening, but
+     * it competes evenly with the UI thread for CPU while scrolling. A background-priority thread
+     * gets the OS to give it less of a share under that contention, without needing to be idle.
+     */
+    private val metadataScope =
+        CoroutineScope(
+            SupervisorJob() +
+                Executors
+                    .newSingleThreadExecutor { runnable ->
+                        Thread {
+                            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+                            runnable.run()
+                        }.apply { name = "cover-metadata" }
+                    }.asCoroutineDispatcher(),
+        )
 
     fun load() {
         val ratios = preferences.coverRatios().get()
@@ -61,6 +85,16 @@ object MangaCoverMetadata {
             remove(manga)
         }
         if (manga.vibrantCoverColor != null && !manga.favorite) return
+        // Nothing left to read off the cover, and this otherwise runs for every one that scrolls
+        // into view - a manga only reaches this state once, the first time all three are found
+        if (!force &&
+            manga.favorite &&
+            getRatio(manga) != null &&
+            manga.dominantCoverColors != null &&
+            manga.vibrantCoverColor != null
+        ) {
+            return
+        }
         val file = ogFile ?: coverCache.getCustomCoverFile(manga).takeIf { it.exists() } ?: coverCache.getCoverFile(manga)
         // if the file exists and the there was still an error then the file is corrupted
         if (file.exists()) {
@@ -73,20 +107,28 @@ object MangaCoverMetadata {
             }
             val bitmap = BitmapFactory.decodeFile(file.path, options)
             if (bitmap != null) {
-                Palette.from(bitmap).generate {
-                    if (it == null) return@generate
-                    if (manga.favorite) {
-                        it.dominantSwatch?.let { swatch ->
-                            manga.dominantCoverColors = swatch.rgb to swatch.titleTextColor
-                        }
+                val palette = Palette.from(bitmap).generate()
+                if (manga.favorite) {
+                    palette.dominantSwatch?.let { swatch ->
+                        manga.dominantCoverColors = swatch.rgb to swatch.titleTextColor
                     }
-                    val color = it.getBestColor() ?: return@generate
-                    manga.vibrantCoverColor = color
                 }
+                palette.getBestColor()?.let { manga.vibrantCoverColor = it }
             }
             if (manga.favorite && !(options.outWidth == -1 || options.outHeight == -1)) {
                 addCoverRatio(manga, options.outWidth / options.outHeight.toFloat())
             }
+        }
+    }
+
+    /** Queues [setRatioAndColors] onto the background-priority thread above. */
+    fun setRatioAndColorsAsync(
+        manga: Manga,
+        ogFile: File? = null,
+        force: Boolean = false,
+    ) {
+        metadataScope.launch {
+            setRatioAndColors(manga, ogFile, force)
         }
     }
 

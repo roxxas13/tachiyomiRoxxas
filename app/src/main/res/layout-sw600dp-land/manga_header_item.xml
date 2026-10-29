@@ -257,7 +257,7 @@
     <View
         android:id="@+id/more_bg_gradient"
         android:layout_width="60dp"
-        android:layout_height="16sp"
+        android:layout_height="18sp"
         android:background="@drawable/full_gradient"
         android:backgroundTint="?attr/background"
         app:layout_constraintBottom_toBottomOf="@id/manga_summary"
@@ -274,7 +274,7 @@
     <View
         android:id="@+id/more_bg_solid"
         android:layout_width="0dp"
-        android:layout_height="16sp"
+        android:layout_height="18sp"
         android:background="?attr/background"
         app:layout_constraintBottom_toBottomOf="@id/manga_summary"
         app:layout_constraintEnd_toEndOf="@id/more_button"
@@ -283,7 +283,7 @@
     <View
         android:id="@+id/more_guide"
         android:layout_width="1dp"
-        android:layout_height="15sp"
+        android:layout_height="14sp"
         app:layout_constraintEnd_toEndOf="@id/manga_summary"
         app:layout_constraintTop_toBottomOf="@id/manga_summary" />
 

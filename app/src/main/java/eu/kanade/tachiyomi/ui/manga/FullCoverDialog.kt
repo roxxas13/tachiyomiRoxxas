@@ -11,6 +11,7 @@ import android.content.IntentFilter
 import android.graphics.Rect
 import android.graphics.RenderEffect
 import android.graphics.Shader
+import android.graphics.drawable.Animatable
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.PowerManager
@@ -62,7 +63,7 @@ import kotlin.math.min
 
 class FullCoverDialog(
     val controller: MangaDetailsController,
-    drawable: Drawable,
+    private val drawable: Drawable,
     private val thumbView: View,
 ) : ComponentDialog(controller.activity!!, R.style.FullCoverDialogTheme) {
     val activity = controller.activity
@@ -231,6 +232,7 @@ class FullCoverDialog(
 
         expandedImageView.setImageDrawable(drawable)
         binding.mangaCoverZoom.setImageDrawable(drawable)
+        (drawable as? Animatable)?.start()
 
         val rect = Rect()
         thumbView.getGlobalVisibleRect(rect)
@@ -347,6 +349,7 @@ class FullCoverDialog(
 
     override fun dismiss() {
         super.dismiss()
+        (drawable as? Animatable)?.stop()
         thumbView.alpha = 1f
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             activity?.window?.decorView?.setRenderEffect(null)

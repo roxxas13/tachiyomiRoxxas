@@ -112,6 +112,13 @@ abstract class BaseController<VB : ViewBinding>(
 
     open fun getSearchTitle(): String? = null
 
+    /**
+     * Source id this controller is currently showing content for, if any.
+     * Combined with the global incognito toggle to decide whether the toolbar's
+     * incognito badge should be shown while this controller is on screen.
+     */
+    open fun getIncognitoSourceId(): Long? = null
+
     open fun getBigIcon(): Drawable? = null
 
     open fun canStillGoBack(): Boolean = false

@@ -74,6 +74,7 @@ import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
 import eu.kanade.tachiyomi.databinding.LibraryControllerBinding
+import eu.kanade.tachiyomi.databinding.MarkReadStatusDialogBinding
 import eu.kanade.tachiyomi.source.LocalSource
 import eu.kanade.tachiyomi.ui.base.MaterialMenuSheet
 import eu.kanade.tachiyomi.ui.base.MiniSearchView
@@ -1104,6 +1105,8 @@ open class LibraryController(
     }
 
     private fun setPreferenceFlows() {
+        // They may have been changed by another controller while this view was gone
+        LibraryItem.updateDisplayPrefs()
         listOf(
             preferences.libraryLayout(),
             preferences.uniformGrid(),
@@ -1114,10 +1117,11 @@ open class LibraryController(
                 .asFlow()
                 .drop(1)
                 .onEach {
+                    LibraryItem.updateDisplayPrefs()
                     reattachAdapter()
                 }.launchIn(viewScope)
         }
-        preferences.hideStartReadingButton().register()
+        preferences.hideStartReadingButton().register { LibraryItem.updateDisplayPrefs() }
         preferences.outlineOnCovers().register { adapter.showOutline = it }
         preferences.categoryNumberOfItems().register { adapter.showNumber = it }
     }
@@ -2412,7 +2416,9 @@ open class LibraryController(
         val migrationItem = menu.findItem(R.id.action_migrate)
         val shareItem = menu.findItem(R.id.action_share)
         val categoryItem = menu.findItem(R.id.action_move_to_category)
+        val editItem = menu.findItem(R.id.action_edit_manga)
         categoryItem.isVisible = presenter.allCategories.size > 1
+        editItem.isVisible = selectedMangas.isNotEmpty() && selectedMangas.all { !it.isLocal() }
         migrationItem.isVisible = selectedMangas.any { it.source != LocalSource.ID }
         shareItem.isVisible = migrationItem.isVisible
         if (count == 0) {
@@ -2430,6 +2436,12 @@ open class LibraryController(
     ): Boolean {
         when (item.itemId) {
             R.id.action_move_to_category -> showChangeMangaCategoriesSheet()
+            R.id.action_edit_manga -> {
+                val ids = selectedMangas.mapNotNull { it.id }.distinct().toLongArray()
+                if (ids.isNotEmpty()) {
+                    BulkEditMangaDialog(this, ids).showDialog(router)
+                }
+            }
             R.id.action_share -> shareManga()
             R.id.action_delete -> {
                 val options =
@@ -2466,22 +2478,14 @@ open class LibraryController(
                 presenter.downloadUnread(selectedMangas.toList())
             }
             R.id.action_mark_as_read -> {
-                activity!!
-                    .materialAlertDialog()
-                    .setMessage(R.string.mark_all_chapters_as_read)
-                    .setPositiveButton(R.string.mark_as_read) { _, _ ->
-                        markReadStatus(R.string.marked_as_read, true)
-                    }.setNegativeButton(android.R.string.cancel, null)
-                    .show()
+                showMarkReadStatusDialog(R.string.mark_all_chapters_as_read, R.string.mark_as_read) {
+                    markReadStatus(R.string.marked_as_read, true)
+                }
             }
             R.id.action_mark_as_unread -> {
-                activity!!
-                    .materialAlertDialog()
-                    .setMessage(R.string.mark_all_chapters_as_unread)
-                    .setPositiveButton(R.string.mark_as_unread) { _, _ ->
-                        markReadStatus(R.string.marked_as_unread, false)
-                    }.setNegativeButton(android.R.string.cancel, null)
-                    .show()
+                showMarkReadStatusDialog(R.string.mark_all_chapters_as_unread, R.string.mark_as_unread) {
+                    markReadStatus(R.string.marked_as_unread, false)
+                }
             }
             R.id.action_migrate -> {
                 val skipPre = preferences.skipPreMigration().get()
@@ -2495,6 +2499,22 @@ open class LibraryController(
             else -> return false
         }
         return true
+    }
+
+    private fun showMarkReadStatusDialog(
+        messageRes: Int,
+        positiveButtonRes: Int,
+        onPositive: () -> Unit,
+    ) {
+        val dialogBinding = MarkReadStatusDialogBinding.inflate(activity!!.layoutInflater)
+        dialogBinding.mangaStack.setupMangaCoverStack(selectedMangas.toList())
+        dialogBinding.message.setText(messageRes)
+        activity!!
+            .materialAlertDialog()
+            .setView(dialogBinding.root)
+            .setPositiveButton(positiveButtonRes) { _, _ -> onPositive() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun markReadStatus(
